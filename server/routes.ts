@@ -35,7 +35,12 @@ function isAnalyzedEvent(e: string) {
   return e === "call_analyzed" || e === "call.analyzed";
 }
 function isFinalEvent(e: string) {
-  return e === "call_completed" || e === "call.completed" || e === "call_ended" || e === "call.ended";
+  return (
+    e === "call_completed" ||
+    e === "call.completed" ||
+    e === "call_ended" ||
+    e === "call.ended"
+  );
 }
 
 function normalizeSpecialties(v: any): string[] {
@@ -46,7 +51,8 @@ function normalizeSpecialties(v: any): string[] {
     if (s.startsWith("[") && s.endsWith("]")) {
       try {
         const parsed = JSON.parse(s);
-        if (Array.isArray(parsed)) return parsed.map((x) => String(x).trim()).filter(Boolean);
+        if (Array.isArray(parsed))
+          return parsed.map((x) => String(x).trim()).filter(Boolean);
       } catch {}
     }
     if (s.includes(",")) return s.split(",").map((x) => x.trim()).filter(Boolean);
@@ -55,7 +61,10 @@ function normalizeSpecialties(v: any): string[] {
   return [];
 }
 
-export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+export async function registerRoutes(
+  httpServer: Server,
+  app: Express
+): Promise<Server> {
   // ---------------------------------------------------------------------------
   // AUTH GUARD
   // - Deja libre /api/auth/* y el webhook de Retell
@@ -68,7 +77,83 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return requireAuth(req as any, res as any, next);
   });
 
+  // ---------------------------------------------------------------------------
+  // AUTH ROUTES (faltaban) ✅
+  // ---------------------------------------------------------------------------
+
+  // GET /api/auth/me -> usuario actual (sesión) o 401
+  app.get("/api/auth/me", async (req: any, res) => {
+    try {
+      const userId = req.session?.userId;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+      const user = await storage.getUserById(String(userId));
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+      return res.json({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      });
+    } catch (err: any) {
+      return res
+        .status(500)
+        .json({ message: err?.message ?? "Failed to load user" });
+    }
+  });
+
+  // POST /api/auth/login -> crea sesión
+  app.post("/api/auth/login", async (req: any, res) => {
+    try {
+      const email = String(req.body?.email || "").toLowerCase().trim();
+      const password = String(req.body?.password || "");
+
+      if (!email || !password) {
+        return res
+          .status(400)
+          .json({ message: "Email y password son obligatorios" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user || !user.passwordHash) {
+        return res.status(401).json({ message: "Credenciales inválidas" });
+      }
+
+      const ok = await bcrypt.compare(password, user.passwordHash);
+      if (!ok) return res.status(401).json({ message: "Credenciales inválidas" });
+
+      // guardar sesión
+      req.session.userId = user.id;
+      req.session.role = user.role;
+
+      return res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        },
+      });
+    } catch (err: any) {
+      return res.status(500).json({ message: err?.message ?? "Login failed" });
+    }
+  });
+
+  // POST /api/auth/logout -> destruye sesión
+  app.post("/api/auth/logout", async (req: any, res) => {
+    try {
+      req.session?.destroy?.(() => {});
+      res.clearCookie?.("connect.sid");
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ message: err?.message ?? "Logout failed" });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // DASHBOARD
+  // ---------------------------------------------------------------------------
   app.get(api.leads.stats.path, async (_req, res) => {
     const stats = await storage.getDashboardStats();
     res.json(stats);
@@ -81,7 +166,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const attorneyId = String(req.body?.attorneyId ?? "").trim(); // ✅ UUID
 
       if (!leadId || !attorneyId) {
-        return res.status(400).json({ message: "leadId y attorneyId son obligatorios" });
+        return res
+          .status(400)
+          .json({ message: "leadId y attorneyId son obligatorios" });
       }
 
       // 1) asignar en DB
@@ -91,25 +178,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const attorney = await storage.getAttorney(attorneyId);
       if (!attorney) return res.status(404).json({ message: "Attorney not found" });
 
-      // 3) enviar correo (sin city/state inventados)
+      // 3) enviar correo
       await sendAttorneyAssignmentEmail({
-  to: attorney.email,
-  attorneyName: attorney.name,
-  leadName: lead.name,
-  leadPhone: lead.phone,
-  caseType: lead.caseType ?? null,
-  urgency: lead.urgency ?? null,
-});
-
+        to: attorney.email,
+        attorneyName: attorney.name,
+        leadName: lead.name,
+        leadPhone: lead.phone,
+        caseType: lead.caseType ?? null,
+        urgency: lead.urgency ?? null,
+      });
 
       return res.json({ success: true, lead, attorney });
     } catch (err: any) {
-  console.error("assign-attorney error:", err);
-  return res.status(500).json({ message: err?.message ?? "Error asignando abogado" });
-}
+      console.error("assign-attorney error:", err);
+      return res
+        .status(500)
+        .json({ message: err?.message ?? "Error asignando abogado" });
+    }
   });
 
+  // ---------------------------------------------------------------------------
   // LEADS
+  // ---------------------------------------------------------------------------
   app.get(api.leads.list.path, async (req, res) => {
     const search = req.query.search as string | undefined;
     const status = req.query.status as string | undefined;
@@ -133,7 +223,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ---------------------------------------------------------------------------
   // CALL LOGS
+  // ---------------------------------------------------------------------------
   app.get("/api/call-logs", async (_req, res) => {
     try {
       const logs = await storage.getCallLogs();
@@ -143,7 +235,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.status(500).json({ message: "Failed to load call logs" });
     }
   });
+
+  // ---------------------------------------------------------------------------
   // ATTORNEYS
+  // ---------------------------------------------------------------------------
   app.get("/api/attorneys", async (req, res) => {
     try {
       const q = String(req.query.q ?? "").trim();
@@ -179,24 +274,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         email,
         phone: safeString(body.phone, "").trim() || null,
         city: safeString(body.city, "").trim() || null,
-        stateProvince: safeString(body.stateProvince ?? body.state_province, "").trim() || null,
+        stateProvince:
+          safeString(body.stateProvince ?? body.state_province, "").trim() || null,
         specialties: normalizeSpecialties(body.specialties),
       } as any);
 
       return res.status(201).json(created);
     } catch (err: any) {
       console.error("Error creating attorney:", err);
-      return res.status(500).json({ message: err?.message ?? "Failed to create attorney" });
+      return res
+        .status(500)
+        .json({ message: err?.message ?? "Failed to create attorney" });
     }
   });
 
   // ---------------------------------------------------------------------------
   // USERS (ADMIN)
   // ---------------------------------------------------------------------------
-
   app.get("/api/users", requireAdmin, async (_req, res) => {
     const users = await storage.listUsers();
-    // never return password hash
     const safe = users.map((u: any) => ({
       id: u.id,
       email: u.email,
@@ -216,7 +312,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const password = String(req.body?.password || "");
 
     if (!email || !name || password.length < 8) {
-      return res.status(400).json({ message: "email, name y password (>=8) son obligatorios" });
+      return res
+        .status(400)
+        .json({ message: "email, name y password (>=8) son obligatorios" });
     }
 
     const exists = await storage.getUserByEmail(email);
@@ -224,6 +322,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await storage.createUser({ email, name, role, passwordHash });
+
     return res.status(201).json({
       id: user.id,
       email: user.email,
@@ -239,6 +338,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const id = String(req.params.id);
     const isActive = Boolean(req.body?.isActive);
     const user = await storage.setUserActive(id, isActive);
+
     return res.json({
       id: user.id,
       email: user.email,
@@ -250,7 +350,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
-  // RETELL WEBHOOK (dejo tu lógica, sin cambiar)
+  // ---------------------------------------------------------------------------
+  // RETELL WEBHOOK
+  // ---------------------------------------------------------------------------
   app.post(api.webhooks.retell.path, async (req, res) => {
     const payload = req.body || {};
     const rawEvent = payload.event || payload.type;
@@ -301,7 +403,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       if (!transcriptText && transcriptTurns) {
         transcriptText = transcriptTurns
-          .map((t: any) => `${t.role || t.speaker || "user"}: ${t.text || t.content || ""}`.trim())
+          .map((t: any) =>
+            `${t.role || t.speaker || "user"}: ${t.text || t.content || ""}`.trim()
+          )
           .filter(Boolean)
           .join("\n");
       }
