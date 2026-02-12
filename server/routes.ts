@@ -71,11 +71,28 @@ export async function registerRoutes(
   // - Protege el resto de /api/*
   // ---------------------------------------------------------------------------
   app.use((req, res, next) => {
-    if (!req.path.startsWith("/api")) return next();
-    if (req.path.startsWith("/api/auth")) return next();
-    if (req.path.startsWith("/api/webhook")) return next();
-    return requireAuth(req as any, res as any, next);
-  });
+  // Solo cuidamos /api
+  if (!req.path.startsWith("/api")) return next();
+
+  // Siempre permitir preflight
+  if (req.method === "OPTIONS") return next();
+
+  // Permitir auth
+  if (req.path.startsWith("/api/auth")) return next();
+
+  // Normaliza path (quita slash final)
+  const cleanPath = req.path.replace(/\/+$/, "");
+
+  // Permitir webhook Retell (cubre /api/retell-webhook y /api/retell-webhook/)
+  const retellPath = api.webhooks.retell.path.replace(/\/+$/, "");
+  if (cleanPath === retellPath) return next();
+
+  // (Opcional) si en Retell estás usando /api/webhook también:
+  if (cleanPath === "/api/webhook") return next();
+
+  return requireAuth(req as any, res as any, next);
+});
+
 
   // ---------------------------------------------------------------------------
   // AUTH ROUTES (faltaban) ✅
