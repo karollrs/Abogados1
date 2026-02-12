@@ -18,8 +18,8 @@ export const queryClient = new QueryClient({
  *
  * Si no existe, usa mismo origen (útil en dev si haces proxy).
  */
-const RAW_API_BASE = (import.meta.env.VITE_API_URL || "").toString().trim();
-const API_BASE = RAW_API_BASE.replace(/\/+$/, ""); // quita "/" final
+const RAW_API_BASE = "";
+const API_BASE = "";
 
 /**
  * Convierte "/api/..." a "https://tu-backend.onrender.com/api/..."
