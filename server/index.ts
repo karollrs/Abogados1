@@ -3,8 +3,10 @@ import express, { type Request, type Response, type NextFunction } from "express
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import "dotenv/config";
 import cors from "cors";
 import { setupAuth } from "./auth";
+
 
 const app = express();
 const httpServer = createServer(app);
@@ -19,27 +21,15 @@ declare module "http" {
 app.use(
   express.json({
     verify: (req, _res, buf) => {
-      (req as any).rawBody = buf;
+      req.rawBody = buf;
     },
   })
 );
 
-// 2) CORS (para Vite 5173 y también 5000)
-const allowedOrigins = new Set([
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "http://localhost:5000",
-  "http://127.0.0.1:5000",
-]);
-
+// 2) CORS (SOLO UNA VEZ)
 app.use(
   cors({
-    origin(origin, cb) {
-      // Permite requests sin Origin (Postman, curl, server-to-server)
-      if (!origin) return cb(null, true);
-      if (allowedOrigins.has(origin)) return cb(null, true);
-      return cb(new Error(`CORS blocked for origin: ${origin}`), false);
-    },
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -59,6 +49,7 @@ export function log(message: string, source = "express") {
     second: "2-digit",
     hour12: true,
   });
+
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
@@ -112,6 +103,7 @@ app.use((req, res, next) => {
 
   const port = parseInt(process.env.PORT || "5000", 10);
 
+  // En Windows, mejor escuchar en 127.0.0.1 en desarrollo
   const host =
     process.env.HOST ||
     (process.platform === "win32" ? "127.0.0.1" : "0.0.0.0");

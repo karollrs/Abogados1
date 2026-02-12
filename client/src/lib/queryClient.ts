@@ -13,19 +13,51 @@ export const queryClient = new QueryClient({
 });
 
 /**
- * Base URL del backend (para cuando el front corre en 5173)
- * Si no está definida, funciona igual en "mismo origen".
+ * Base URL del backend (Render) para cuando el front corre en Vercel
+ * Ej: VITE_API_URL=https://abogados1.onrender.com
+ *
+ * Si no existe, usa mismo origen (útil en dev si haces proxy).
  */
-const API_BASE = (import.meta as any).env?.VITE_API_URL?.toString()?.trim() || "";
+const RAW_API_BASE = (import.meta.env.VITE_API_URL || "").toString().trim();
+const API_BASE = RAW_API_BASE.replace(/\/+$/, ""); // quita "/" final
 
 /**
- * Convierte "/api/..." a "http://127.0.0.1:5000/api/..."
+ * Convierte "/api/..." a "https://tu-backend.onrender.com/api/..."
  */
 export function withApiBase(url: string) {
   if (!API_BASE) return url;
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+
+  // Si ya es absoluta, no tocar
+  if (/^https?:\/\//i.test(url)) return url;
+
+  // Asegura slash
   if (!url.startsWith("/")) return `${API_BASE}/${url}`;
   return `${API_BASE}${url}`;
+}
+
+/**
+ * Parsea error de backend de forma segura.
+ */
+async function readError(res: Response) {
+  const contentType = res.headers.get("content-type") || "";
+
+  // Si backend devuelve JSON {message: "..."}
+  if (contentType.includes("application/json")) {
+    try {
+      const data = await res.json();
+      return data?.message ? String(data.message) : JSON.stringify(data);
+    } catch {
+      // cae a texto
+    }
+  }
+
+  // Si devuelve texto/HTML
+  try {
+    const text = await res.text();
+    return text || `Request failed: ${res.status}`;
+  } catch {
+    return `Request failed: ${res.status}`;
+  }
 }
 
 /**
@@ -34,14 +66,16 @@ export function withApiBase(url: string) {
 export async function apiRequest(method: string, url: string, body?: unknown) {
   const res = await fetch(withApiBase(url), {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      Accept: "application/json",
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
     credentials: "include",
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Request failed: ${res.status}`);
+    throw new Error(await readError(res));
   }
 
   return res;
@@ -55,6 +89,9 @@ export function getQueryFn({ on401 }: { on401: "throw" | "returnNull" }) {
     const url = String(queryKey[0]);
     const res = await fetch(withApiBase(url), {
       credentials: "include",
+      headers: {
+        Accept: "application/json",
+      },
     });
 
     if (res.status === 401) {
@@ -63,9 +100,12 @@ export function getQueryFn({ on401 }: { on401: "throw" | "returnNull" }) {
     }
 
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || `Request failed: ${res.status}`);
+      throw new Error(await readError(res));
     }
+
+    // Si no hay body (204, etc.)
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) return null;
 
     return res.json();
   };
