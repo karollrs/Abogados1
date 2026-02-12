@@ -1,12 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { getQueryFn } from "@/lib/queryClient"; // ajusta si tu ruta es distinta
 
 export function useCallLogs() {
   return useQuery({
-    queryKey: ["call-logs"],
-    queryFn: async () => {
-      const res = await fetch("http://127.0.0.1:5000/api/call-logs", {credentials: "include",});
-      if (!res.ok) throw new Error("Failed to fetch call logs");
-      return await res.json();
-    },
+    queryKey: ["/api/call-logs"],
+    queryFn: getQueryFn({ on401: "throw" }),
   });
 }
