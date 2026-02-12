@@ -50,7 +50,8 @@ app.use(
 );
 
 // ✅ Fuerza respuesta a preflight en todas las rutas
-app.options("*", cors());
+app.options("/*", cors());
+
 
 
 // 3) URL Encoded (forms)
