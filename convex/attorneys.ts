@@ -1,19 +1,17 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-/**
- * Obtener abogado por el ID nativo de Convex (_id)
- */
 export const getById = query({
-  args: { id: v.id("attorneys") },
+  // ESTE id es tu campo legacy "attorneys.id" (string uuid)
+  args: { id: v.string() },
   handler: async (ctx, { id }) => {
-    return await ctx.db.get(id);
+    return await ctx.db
+      .query("attorneys")
+      .withIndex("by_attorneyId", (q) => q.eq("id", id))
+      .unique();
   },
 });
 
-/**
- * Listar / filtrar abogados (filtro en memoria por simplicidad)
- */
 export const list = query({
   args: {
     q: v.optional(v.string()),
@@ -36,7 +34,6 @@ export const list = query({
       }
       if (city && String(a.city ?? "").toLowerCase() !== city) return false;
       if (state && String(a.stateProvince ?? "").toLowerCase() !== state) return false;
-
       if (specialty) {
         const specs = (a.specialties ?? []).map((s) => String(s).toLowerCase());
         if (!specs.some((s) => s.includes(specialty))) return false;
@@ -46,26 +43,20 @@ export const list = query({
   },
 });
 
-/**
- * Crear abogado (según tu schema actual)
- * - Mantiene id:string (uuid legacy)
- * - email es obligatorio
- * - specialties es obligatorio (si no llega, se usa [])
- */
 export const create = mutation({
   args: {
-    id: v.string(),                 // requerido por tu schema
+    id: v.string(),
     name: v.string(),
-    email: v.string(),              // requerido por tu schema
+    email: v.string(),
     phone: v.optional(v.string()),
     city: v.optional(v.string()),
     stateProvince: v.optional(v.string()),
-    specialties: v.optional(v.array(v.string())), // en schema es requerido, aquí lo hacemos optional y ponemos default
+    specialties: v.optional(v.array(v.string())),
   },
   handler: async (ctx, a) => {
     const now = Date.now();
 
-    const newDocId = await ctx.db.insert("attorneys", {
+    const docId = await ctx.db.insert("attorneys", {
       id: a.id,
       name: a.name,
       email: a.email,
@@ -76,6 +67,7 @@ export const create = mutation({
       createdAt: now,
     });
 
-    return await ctx.db.get(newDocId);
+    // Devuelve el documento recién creado
+    return await ctx.db.get(docId);
   },
 });

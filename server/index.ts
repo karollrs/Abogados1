@@ -59,11 +59,13 @@ app.use((req, res, next) => {
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
-  const originalResJson = res.json.bind(res);
-  res.json = (bodyJson: any, ...args: any[]) => {
-    capturedJsonResponse = bodyJson;
-    return originalResJson(bodyJson, ...args);
-  };
+const originalResJson = res.json.bind(res);
+
+res.json = (body: any) => {
+  // si aquí estás leyendo/modificando body, hazlo antes
+  return originalResJson(body);
+};
+
 
   res.on("finish", () => {
     const duration = Date.now() - start;

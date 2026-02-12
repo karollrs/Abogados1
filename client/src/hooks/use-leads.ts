@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl, type RetellWebhookPayload } from "@shared/routes";
+import { api, buildUrl } from "@shared/routes";
+
+type RetellWebhookPayload = Record<string, unknown>;
+
 
 export function useLeads(search?: string, status?: string) {
   return useQuery({

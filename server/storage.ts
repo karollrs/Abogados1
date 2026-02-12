@@ -11,6 +11,8 @@ import type {
   InsertAttorney,
   User,
 } from "@shared/schema";
+import type { Id } from "../convex/_generated/dataModel";
+
 
 // Normalizador fuerte para specialties
 function normalizeSpecialties(v: any): string[] {
@@ -199,7 +201,7 @@ export class ConvexStorage implements IStorage {
   // -------------------------
   async getAttorney(attorneyId: string): Promise<Attorney | undefined> {
     const { client, api } = convexClient();
-    const row: any = await client.query(api.attorneys.getById, { id: attorneyId });
+    const row: any = await client.query(api.attorneys.getById, { id: attorneyId as Id<"attorneys"> });
     if (!row) return undefined;
     return { ...row, createdAt: row.createdAt ? new Date(row.createdAt) : null } as any;
   }
