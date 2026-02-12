@@ -73,7 +73,7 @@ export async function registerRoutes(
   app.use((req, res, next) => {
     if (!req.path.startsWith("/api")) return next();
     if (req.path.startsWith("/api/auth")) return next();
-    if (req.path === api.webhooks.retell.path) return next();
+    if (req.path.startsWith("/api/webhook")) return next();
     return requireAuth(req as any, res as any, next);
   });
 
