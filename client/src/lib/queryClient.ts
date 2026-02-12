@@ -13,18 +13,17 @@ export const queryClient = new QueryClient({
 });
 
 /**
- * Base URL del backend (Render) para cuando el front corre en Vercel
- * Ej: VITE_API_URL=https://abogados1.onrender.com
- *
- * Si no existe, usa mismo origen (útil en dev si haces proxy).
+ * Base URL del backend cuando el front está en OTRO dominio (ej: Vercel).
+ * - En Render (front+back juntos): déjalo vacío para usar mismo origen.
+ * - En Vercel: define VITE_API_URL=https://abogados1.onrender.com
  */
-const RAW_API_BASE = "";
-const API_BASE = "";
+const API_BASE = (import.meta.env.VITE_API_URL || "").toString().trim().replace(/\/$/, "");
 
 /**
  * Convierte "/api/..." a "https://tu-backend.onrender.com/api/..."
  */
 export function withApiBase(url: string) {
+  // si no hay API_BASE, usa mismo origen (ideal para Render)
   if (!API_BASE) return url;
 
   // Si ya es absoluta, no tocar
@@ -41,7 +40,6 @@ export function withApiBase(url: string) {
 async function readError(res: Response) {
   const contentType = res.headers.get("content-type") || "";
 
-  // Si backend devuelve JSON {message: "..."}
   if (contentType.includes("application/json")) {
     try {
       const data = await res.json();
@@ -51,7 +49,6 @@ async function readError(res: Response) {
     }
   }
 
-  // Si devuelve texto/HTML
   try {
     const text = await res.text();
     return text || `Request failed: ${res.status}`;
@@ -74,24 +71,20 @@ export async function apiRequest(method: string, url: string, body?: unknown) {
     credentials: "include",
   });
 
-  if (!res.ok) {
-    throw new Error(await readError(res));
-  }
-
+  if (!res.ok) throw new Error(await readError(res));
   return res;
 }
 
 /**
- * Query helper: maneja 401 como null o throw
+ * Query helper
  */
 export function getQueryFn({ on401 }: { on401: "throw" | "returnNull" }) {
   return async ({ queryKey }: { queryKey: any[] }) => {
     const url = String(queryKey[0]);
+
     const res = await fetch(withApiBase(url), {
       credentials: "include",
-      headers: {
-        Accept: "application/json",
-      },
+      headers: { Accept: "application/json" },
     });
 
     if (res.status === 401) {
@@ -99,11 +92,8 @@ export function getQueryFn({ on401 }: { on401: "throw" | "returnNull" }) {
       throw new Error("Unauthorized");
     }
 
-    if (!res.ok) {
-      throw new Error(await readError(res));
-    }
+    if (!res.ok) throw new Error(await readError(res));
 
-    // Si no hay body (204, etc.)
     const contentType = res.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) return null;
 
