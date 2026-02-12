@@ -27,14 +27,26 @@ app.use(
 );
 
 // 2) CORS (SOLO UNA VEZ)
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://abogados1.vercel.app" // 👈 CAMBIA por tu dominio exacto
+];
+
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    origin: (origin, callback) => {
+      // permite requests sin origin (Postman/Retell/webhooks)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
 
 // 3) URL Encoded (forms)
 app.use(express.urlencoded({ extended: false }));
