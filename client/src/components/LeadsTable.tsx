@@ -1,3 +1,4 @@
+import { useMemo, useState, useEffect } from "react";
 import { MoreHorizontal, Phone, AlertCircle } from "lucide-react";
 import { type Lead } from "@shared/schema";
 import { useUpdateLead } from "@/hooks/use-leads";
@@ -26,6 +27,21 @@ interface LeadsTableProps {
 export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
   const updateLead = useUpdateLead();
   const [, navigate] = useLocation();
+
+  const ITEMS_PER_PAGE = 7;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // si cambia la lista (por búsqueda/filtros), vuelve a página 1
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [leads]);
+
+  const totalPages = Math.max(1, Math.ceil((leads?.length || 0) / ITEMS_PER_PAGE));
+
+  const paginatedLeads = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return (leads || []).slice(start, start + ITEMS_PER_PAGE);
+  }, [leads, currentPage]);
 
   if (isLoading) {
     return (
@@ -76,7 +92,7 @@ export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
                 </td>
               </tr>
             ) : (
-              leads.map((lead) => (
+              paginatedLeads.map((lead) => (
                 <tr key={lead.id} className="hover:bg-muted/30 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="font-medium text-foreground">{lead.name}</div>
@@ -125,9 +141,9 @@ export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
                     <button
                       type="button"
                       onClick={(e) => {
-                        e.stopPropagation(); // ✅ evita que la fila capture el click
+                        e.stopPropagation();
                         const phone = lead.phone || "";
-                        navigate(`/call-logs?phone=${encodeURIComponent(phone)}`);
+                        navigate(`/calls?phone=${encodeURIComponent(phone)}`);
                       }}
                       className="text-muted-foreground hover:text-primary transition-colors p-2 rounded-lg hover:bg-primary/5"
                       title="Ver llamadas"
@@ -141,6 +157,64 @@ export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination (FUERA de la tabla) */}
+      {/* Pagination (minimal + bonita) */}
+{leads.length > 0 && totalPages > 1 && (
+  <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border bg-muted/20">
+    <div className="text-xs text-muted-foreground">
+      Mostrando{" "}
+      <span className="font-medium text-foreground">
+        {(currentPage - 1) * ITEMS_PER_PAGE + 1}
+      </span>
+      {"–"}
+      <span className="font-medium text-foreground">
+        {Math.min(currentPage * ITEMS_PER_PAGE, leads.length)}
+      </span>{" "}
+      de{" "}
+      <span className="font-medium text-foreground">{leads.length}</span>
+    </div>
+
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+        disabled={currentPage === 1}
+        className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted transition disabled:opacity-40 disabled:hover:bg-card"
+        aria-label="Página anterior"
+        title="Anterior"
+      >
+        {"<"}
+      </button>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground hidden sm:inline">
+          Página
+        </span>
+
+        <span className="min-w-[44px] text-center px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/10 text-primary font-semibold text-sm">
+          {currentPage}
+        </span>
+
+        <span className="text-xs text-muted-foreground">
+          de <span className="font-medium text-foreground">{totalPages}</span>
+        </span>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+        disabled={currentPage === totalPages}
+        className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted transition disabled:opacity-40 disabled:hover:bg-card"
+        aria-label="Página siguiente"
+        title="Siguiente"
+      >
+        {">"}
+      </button>
+    </div>
+  </div>
+)}
+
     </div>
   );
 }

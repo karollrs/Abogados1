@@ -12,10 +12,9 @@ import { useLogout, useUser } from "@/hooks/use-auth";
 
 const baseNavigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "Leads", href: "/leads", icon: UsersIcon },
   { name: "Call Logs", href: "/calls", icon: Phone },
   { name: "Attorneys", href: "/attorneys", icon: Gavel },
-  { name: "Settings", href: "/settings", icon: Settings },
+  
 ];
 
 export function Sidebar() {
