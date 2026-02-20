@@ -3,14 +3,14 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-auth";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { UserCog, Shield, User, CheckCircle2, XCircle } from "lucide-react";
+import { UserCog, Shield, User, CheckCircle2, XCircle, Gavel } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 
 type Row = {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "agent";
+  role: "admin" | "agent" | "abogado";
   isActive: number;
   createdAt?: number;
   updatedAt?: number;
@@ -60,7 +60,7 @@ export default function UsersPage() {
 
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"admin" | "agent">("agent");
+  const [role, setRole] = useState<"admin" | "agent" | "abogado">("agent");
   const [password, setPassword] = useState("");
 
   const canCreate = useMemo(() => {
@@ -113,7 +113,13 @@ export default function UsersPage() {
                 Sesión: <span className="font-semibold">{me.email}</span>
               </Badge>
               <Badge variant={me.role === "admin" ? "default" : "muted"}>
-                {me.role === "admin" ? <Shield className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+                {me.role === "admin" ? (
+                  <Shield className="h-3.5 w-3.5" />
+                ) : me.role === "abogado" ? (
+                  <Gavel className="h-3.5 w-3.5" />
+                ) : (
+                  <User className="h-3.5 w-3.5" />
+                )}
                 {me.role}
               </Badge>
             </div>
@@ -177,6 +183,7 @@ export default function UsersPage() {
                       onChange={(e) => setRole(e.target.value as any)}
                     >
                       <option value="agent">agent</option>
+                      <option value="abogado">abogado</option>
                       <option value="admin">admin</option>
                     </select>
                   </div>
@@ -243,7 +250,13 @@ export default function UsersPage() {
                           </td>
                           <td className="px-6 py-4">
                             <Badge variant={u.role === "admin" ? "default" : "muted"}>
-                              {u.role === "admin" ? <Shield className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+                              {u.role === "admin" ? (
+                                <Shield className="h-3.5 w-3.5" />
+                              ) : u.role === "abogado" ? (
+                                <Gavel className="h-3.5 w-3.5" />
+                              ) : (
+                                <User className="h-3.5 w-3.5" />
+                              )}
                               {u.role}
                             </Badge>
                           </td>

@@ -165,19 +165,30 @@ export class ConvexStorage implements IStorage {
 
   async createCallLog(log: InsertCallLog): Promise<CallLog> {
     const { client, api } = convexClient();
-    const created: any = await client.mutation(api.callLogs.create, {
-      leadId: (log as any).leadId ?? undefined,
+    const created: any = await client.mutation(api.callLogs.upsertByRetellCallId, {
       retellCallId: (log as any).retellCallId,
-      agentId: (log as any).agentId ?? undefined,
-      phoneNumber: (log as any).phoneNumber ?? undefined,
-      status: (log as any).status ?? undefined,
-      direction: (log as any).direction ?? undefined,
-      duration: (log as any).duration ?? undefined,
-      recordingUrl: (log as any).recordingUrl ?? undefined,
-      summary: (log as any).summary ?? undefined,
-      transcript: (log as any).transcript ?? undefined,
-      sentiment: (log as any).sentiment ?? undefined,
-      analysis: (log as any).analysis ?? undefined,
+      updates: {
+        leadId: (log as any).leadId ?? undefined,
+        agentId: (log as any).agentId ?? undefined,
+        phoneNumber: (log as any).phoneNumber ?? undefined,
+        status: (log as any).status ?? undefined,
+        direction: (log as any).direction ?? undefined,
+        duration: (log as any).duration ?? undefined,
+        recordingUrl: (log as any).recordingUrl ?? undefined,
+        summary: (log as any).summary ?? undefined,
+        transcript: (log as any).transcript ?? undefined,
+        sentiment: (log as any).sentiment ?? undefined,
+        analysis: (log as any).analysis ?? undefined,
+        pendingAttorneyId: (log as any).pendingAttorneyId ?? undefined,
+        assignmentStatus: (log as any).assignmentStatus ?? undefined,
+        assignmentNotes: (log as any).assignmentNotes ?? undefined,
+        assignmentRequestedAt: (log as any).assignmentRequestedAt ?? undefined,
+        assignmentDecisionAt: (log as any).assignmentDecisionAt ?? undefined,
+        assignmentDecisionByAttorneyId:
+          (log as any).assignmentDecisionByAttorneyId ?? undefined,
+        assignmentDecisionNotes:
+          (log as any).assignmentDecisionNotes ?? undefined,
+      },
     });
     return { ...created, createdAt: created.createdAt ? new Date(created.createdAt) : null } as any;
   }
@@ -226,6 +237,7 @@ export class ConvexStorage implements IStorage {
       phone: (attorney as any).phone ?? undefined,
       city: (attorney as any).city ?? undefined,
       stateProvince: (attorney as any).stateProvince ?? undefined,
+      notes: (attorney as any).notes ?? undefined,
       specialties: normalizeSpecialties((attorney as any).specialties),
     });
     return { ...created, createdAt: created.createdAt ? new Date(created.createdAt) : null } as any;

@@ -5,7 +5,7 @@ export type User = {
   id: string;
   email: string;
   name: string;
-  role: "agent" | "admin";
+  role: "agent" | "admin" | "abogado";
 };
 
 type LoginResponse = { user: User };

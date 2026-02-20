@@ -29,7 +29,7 @@ export const list = query({
 
     return all.filter((a) => {
       if (q) {
-        const hay = `${a.name ?? ""} ${a.email ?? ""} ${a.phone ?? ""}`.toLowerCase();
+        const hay = `${a.name ?? ""} ${a.email ?? ""} ${a.phone ?? ""} ${a.notes ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       if (city && String(a.city ?? "").toLowerCase() !== city) return false;
@@ -51,6 +51,7 @@ export const create = mutation({
     phone: v.optional(v.string()),
     city: v.optional(v.string()),
     stateProvince: v.optional(v.string()),
+    notes: v.optional(v.string()),
     specialties: v.optional(v.array(v.string())),
   },
   handler: async (ctx, a) => {
@@ -63,6 +64,7 @@ export const create = mutation({
       phone: a.phone,
       city: a.city,
       stateProvince: a.stateProvince,
+      notes: a.notes,
       specialties: a.specialties ?? [],
       createdAt: now,
     });

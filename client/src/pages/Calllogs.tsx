@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { useCallLogs } from "@/hooks/use-call-logs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,15 @@ function formatDuration(seconds?: number | null) {
 function StatusBadge({ status }: { status?: string | null }) {
   const s = (status ?? "pendiente").toLowerCase();
 
+  if (s === "pendiente_aprobacion_abogado") {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700 dark:bg-orange-950/30 dark:text-orange-300">
+        <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+        Pendiente por aprobacion del abogado
+      </span>
+    );
+  }
+
   if (s === "pendiente") {
     return (
       <span className="inline-flex items-center gap-2 rounded-full bg-yellow-50 px-3 py-1 text-xs font-medium text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-300">
@@ -38,7 +47,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
         <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-        En espera de aceptación
+        En espera de aceptaciÃ³n
       </span>
     );
   }
@@ -52,9 +61,18 @@ function StatusBadge({ status }: { status?: string | null }) {
     );
   }
 
+  if (s === "rechazada_por_abogado") {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-950/30 dark:text-red-300">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+        Rechazada por abogado
+      </span>
+    );
+  }
+
   return (
     <span className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-      {status ?? "—"}
+      {status ?? "â€”"}
     </span>
   );
 }
@@ -62,19 +80,48 @@ function StatusBadge({ status }: { status?: string | null }) {
 
 const norm = (v: any) => String(v ?? "").trim().toLowerCase();
 
+function getRecordingUrl(call: any): string {
+  return String(
+    call?.recordingUrl ??
+      call?.recording_url ??
+      call?.recording_url_public ??
+      call?.recording?.url ??
+      call?.recording?.recording_url ??
+      call?.recording?.recording_url_public ??
+      call?.recording?.public_url ??
+      call?.scrubbed_recording_url ??
+      call?.recording_multi_channel_url ??
+      call?.scrubbed_recording_multi_channel_url ??
+      call?.analysis?.recordingUrl ??
+      call?.analysis?.recording_url ??
+      call?.analysis?.recording_url_public ??
+      call?.analysis?.recording?.url ??
+      call?.analysis?.recording?.recording_url ??
+      call?.analysis?.recording?.recording_url_public ??
+      call?.analysis?.post_call_analysis?.recordingUrl ??
+      call?.analysis?.post_call_analysis?.recording_url ??
+      call?.analysis?.post_call_analysis?.recording_url_public ??
+      call?.analysis?.post_call_analysis?.recording?.url ??
+      call?.analysis?.scrubbed_recording_url ??
+      call?.analysis?.recording_multi_channel_url ??
+      call?.analysis?.scrubbed_recording_multi_channel_url ??
+      ""
+  ).trim();
+}
+
 export default function CallLogs() {
   const [, setLocation] = useLocation();
 
-  const { data: logs, isLoading, error } = useCallLogs();
+  const { data: logs, isLoading, error, refetch: refetchCallLogs } = useCallLogs();
 
 
-  // ✅ Fuente REAL de query params (no falla)
+  // âœ… Fuente REAL de query params (no falla)
   const [searchStr, setSearchStr] = useState(() => window.location.search);
 
 
 
 
-  // ✅ Actualiza searchStr si cambia la URL (cuando navegas con wouter)
+  // âœ… Actualiza searchStr si cambia la URL (cuando navegas con wouter)
 
 
 
@@ -103,6 +150,9 @@ export default function CallLogs() {
   const [attorneys, setAttorneys] = useState<any[]>([]);
   const [attorneysLoading, setAttorneysLoading] = useState(false);
   const [attorneysError, setAttorneysError] = useState<string | null>(null);
+  const [confirmAssignOpen, setConfirmAssignOpen] = useState(false);
+  const [attorneyToAssign, setAttorneyToAssign] = useState<any>(null);
+  const [assignmentNotes, setAssignmentNotes] = useState("");
 
   // filtros
   const [cityText, setCityText] = useState("");
@@ -138,11 +188,11 @@ export default function CallLogs() {
     });
   }, [logs, cityText, caseTypeText]);
 
-  // PAGINACIÓN
+  // PAGINACIÃ“N
 const ITEMS_PER_PAGE = 7;
 const [currentPage, setCurrentPage] = useState(1);
 
-// Resetear página cuando cambien los filtros o datos
+// Resetear pÃ¡gina cuando cambien los filtros o datos
 useEffect(() => {
   setCurrentPage(1);
 }, [cityText, caseTypeText, logs]);
@@ -158,7 +208,7 @@ const paginatedLogs = useMemo(() => {
 }, [filteredLogs, currentPage]);
 
 
-  // ✅ Auto-open por phone
+  // âœ… Auto-open por phone
 
   useEffect(() => {
     if (!phoneFromUrl) return;
@@ -181,7 +231,7 @@ const paginatedLogs = useMemo(() => {
     }
   }, [phoneFromUrl, logs, open]);
 
-  // ✅ Auto-open por callId
+  // âœ… Auto-open por callId
   useEffect(() => {
     if (!callIdFromUrl) return;
     if (!logs?.length) return;
@@ -198,7 +248,7 @@ const paginatedLogs = useMemo(() => {
     }
   }, [callIdFromUrl, logs, open]);
 
-  // ✅ Cargar abogados cuando abres el modal asignar
+  // âœ… Cargar abogados cuando abres el modal asignar
   useEffect(() => {
     if (!assignOpen) return;
 
@@ -221,6 +271,9 @@ const paginatedLogs = useMemo(() => {
 
   const getLeadIdFromSelected = (s: any) => s?.leadId ?? s?.lead_id ?? s?.lead?.id ?? s?.id;
   const selectedLeadId = selected ? getLeadIdFromSelected(selected) : null;
+  const selectedRetellCallId = String(
+    selected?.retellCallId ?? selected?.call_id ?? selected?.callId ?? ""
+  );
 
   const bestAttorneyIds = useMemo(() => {
     if (!selected) return new Set<string>();
@@ -252,6 +305,19 @@ const paginatedLogs = useMemo(() => {
     return set;
   }, [attorneys, selected]);
 
+  const assignmentPreview = useMemo(() => {
+    if (!selected || !attorneyToAssign) return null;
+    return {
+      attorneyName: String(attorneyToAssign?.name ?? "Abogado"),
+      attorneyEmail: String(attorneyToAssign?.email ?? "sin correo"),
+      leadName: String(selected?.leadName ?? "Lead"),
+      leadPhone: String(selected?.phoneNumber ?? "N/A"),
+      caseType: String(selected?.caseType ?? selected?.case_type ?? "General"),
+      urgency: String(selected?.urgency ?? "Media"),
+      summary: String(selected?.summary ?? "Sin resumen"),
+    };
+  }, [selected, attorneyToAssign]);
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
@@ -262,7 +328,7 @@ const paginatedLogs = useMemo(() => {
             <div className="space-y-1">
               <h1 className="text-3xl font-bold tracking-tight">Call Logs</h1>
               <p className="text-muted-foreground">
-                Historial de llamadas con resumen, análisis y transcripción
+                Historial de llamadas con resumen, anÃ¡lisis y transcripciÃ³n
               </p>
             </div>
           </div>
@@ -271,13 +337,13 @@ const paginatedLogs = useMemo(() => {
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-gray-700">
-                Ciudad / Ubicación (EE. UU.)
+                Ciudad / UbicaciÃ³n (EE. UU.)
               </label>
 
               <input
                 list="us-cities"
                 type="text"
-                placeholder="Escribe una ciudad…"
+                placeholder="Escribe una ciudadâ€¦"
                 value={cityText}
                 onChange={(e) => setCityText(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -296,7 +362,7 @@ const paginatedLogs = useMemo(() => {
               <input
                 list="case-types"
                 type="text"
-                placeholder="Escribe un tipo de caso…"
+                placeholder="Escribe un tipo de casoâ€¦"
                 value={caseTypeText}
                 onChange={(e) => setCaseTypeText(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -323,7 +389,7 @@ const paginatedLogs = useMemo(() => {
             </CardHeader>
 
             <CardContent className="pt-0">
-              {isLoading && <div className="text-muted-foreground">Cargando…</div>}
+              {isLoading && <div className="text-muted-foreground">Cargandoâ€¦</div>}
 
               {error && (
                 <div className="text-destructive">
@@ -360,7 +426,7 @@ const paginatedLogs = useMemo(() => {
                           }}
                           className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 transition"
                         >
-                          Ver detalles →
+                          Ver detalles â†’
                         </button>
 
                         <button
@@ -407,7 +473,7 @@ const paginatedLogs = useMemo(() => {
       <span className="font-medium text-foreground">
         {(currentPage - 1) * ITEMS_PER_PAGE + 1}
       </span>
-      {"–"}
+      {"â€“"}
       <span className="font-medium text-foreground">
         {Math.min(currentPage * ITEMS_PER_PAGE, filteredLogs.length)}
       </span>{" "}
@@ -460,7 +526,7 @@ const paginatedLogs = useMemo(() => {
 
           setSelected(null);
 
-          // ✅ Si venía de una pantalla, volver a esa
+          // âœ… Si venÃ­a de una pantalla, volver a esa
           if (fromUrl) {
             setLocation(fromUrl);
             return;
@@ -516,12 +582,16 @@ const paginatedLogs = useMemo(() => {
                       Resumen
                     </TabsTrigger>
                     <TabsTrigger value="transcripcion" className="rounded-lg">
-                      Transcripción
+                      TranscripciÃ³n
                     </TabsTrigger>
                     <TabsTrigger value="analisis" className="rounded-lg">
-                      Análisis
+                      AnÃ¡lisis
                     </TabsTrigger>
-                    <TabsTrigger value="audio" className="rounded-lg" disabled={!selected.recordingUrl}>
+                    <TabsTrigger
+                      value="audio"
+                      className="rounded-lg"
+                      disabled={!getRecordingUrl(selected)}
+                    >
                       Audio
                     </TabsTrigger>
                   </TabsList>
@@ -532,7 +602,7 @@ const paginatedLogs = useMemo(() => {
                         <CardTitle className="text-base">Resumen</CardTitle>
                       </CardHeader>
                       <CardContent className="text-sm text-foreground/80 leading-relaxed">
-                        {selected.summary ?? selected.analysis?.call_summary ?? "Sin resumen (aún)."}
+                        {selected.summary ?? selected.analysis?.call_summary ?? "Sin resumen (aÃºn)."}
                       </CardContent>
                     </Card>
                   </TabsContent>
@@ -540,7 +610,7 @@ const paginatedLogs = useMemo(() => {
                   <TabsContent value="transcripcion" className="mt-4">
                     <Card className="rounded-2xl border-border/60 shadow-sm">
                       <CardHeader className="flex-row items-center justify-between">
-                        <CardTitle className="text-base">Transcripción</CardTitle>
+                        <CardTitle className="text-base">TranscripciÃ³n</CardTitle>
 
                         <button
                           type="button"
@@ -559,7 +629,7 @@ const paginatedLogs = useMemo(() => {
 
                       <CardContent>
                         <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-sm whitespace-pre-wrap leading-relaxed">
-                          {selected.transcript ?? "Sin transcripción (aún)."}
+                          {selected.transcript ?? "Sin transcripciÃ³n (aÃºn)."}
                         </div>
                       </CardContent>
                     </Card>
@@ -568,7 +638,7 @@ const paginatedLogs = useMemo(() => {
                   <TabsContent value="analisis" className="mt-4">
                     <Card className="rounded-2xl border-border/60 shadow-sm">
                       <CardHeader>
-                        <CardTitle className="text-base">Análisis</CardTitle>
+                        <CardTitle className="text-base">AnÃ¡lisis</CardTitle>
                       </CardHeader>
 
                       <CardContent className="space-y-4">
@@ -579,14 +649,14 @@ const paginatedLogs = useMemo(() => {
                               <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                                 <div className="text-xs text-muted-foreground">Sentimiento</div>
                                 <div className="font-medium">
-                                  {selected.analysis?.user_sentiment ?? "—"}
+                                  {selected.analysis?.user_sentiment ?? "â€”"}
                                 </div>
                               </div>
 
                               <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                                 <div className="text-xs text-muted-foreground">Exitosa</div>
                                 <div className="font-medium">
-                                  {String(selected.analysis?.call_successful ?? "—")}
+                                  {String(selected.analysis?.call_successful ?? "â€”")}
                                 </div>
                               </div>
                             </div>
@@ -594,7 +664,7 @@ const paginatedLogs = useMemo(() => {
                             <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                               <div className="text-xs text-muted-foreground mb-2">Resumen IA</div>
                               <div className="leading-relaxed text-foreground/80">
-                                {selected.analysis?.call_summary ?? "—"}
+                                {selected.analysis?.call_summary ?? "â€”"}
                               </div>
                             </div>
                           </div>
@@ -609,9 +679,9 @@ const paginatedLogs = useMemo(() => {
                         <CardTitle className="text-base">Audio</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        {selected.recordingUrl ? (
+                        {getRecordingUrl(selected) ? (
                           <audio controls className="w-full">
-                            <source src={selected.recordingUrl} />
+                            <source src={getRecordingUrl(selected)} />
                           </audio>
                         ) : (
                           <div className="text-sm text-muted-foreground">No hay audio disponible.</div>
@@ -631,7 +701,12 @@ const paginatedLogs = useMemo(() => {
         open={assignOpen}
         onOpenChange={(next) => {
           setAssignOpen(next);
-          if (!next) setAttorneysError(null);
+          if (!next) {
+            setAttorneysError(null);
+            setConfirmAssignOpen(false);
+            setAttorneyToAssign(null);
+            setAssignmentNotes("");
+          }
         }}
       >
         <DialogContent className="max-w-3xl">
@@ -641,7 +716,7 @@ const paginatedLogs = useMemo(() => {
 
           {!selectedLeadId ? (
             <div className="text-sm text-destructive">
-              No pude detectar el leadId de esta llamada. Revisa que tu backend esté retornando leadId en /api/call-logs.
+              No pude detectar el leadId de esta llamada. Revisa que tu backend estÃ© retornando leadId en /api/call-logs.
             </div>
           ) : (
             <>
@@ -649,7 +724,7 @@ const paginatedLogs = useMemo(() => {
                 Lead ID: <span className="text-foreground font-medium">{String(selectedLeadId)}</span>
               </div>
 
-              {attorneysLoading && <div className="text-muted-foreground">Cargando abogados…</div>}
+              {attorneysLoading && <div className="text-muted-foreground">Cargando abogadosâ€¦</div>}
               {attorneysError && <div className="text-destructive">Error: {attorneysError}</div>}
 
               {!attorneysLoading && !attorneysError && attorneys.length === 0 && (
@@ -680,25 +755,13 @@ const paginatedLogs = useMemo(() => {
                       <button
                         type="button"
                         disabled={assigning}
-                        onClick={async () => {
-                          try {
-                            setAssigning(true);
-                            const r = await fetch(`/api/leads/${selectedLeadId}/assign-attorney`, {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ attorneyId: attorney.id }),
-                            });
-                            if (!r.ok) throw new Error(await r.text());
-                            setAssignOpen(false);
-                          } catch (e: any) {
-                            alert(e?.message ?? "Error asignando abogado");
-                          } finally {
-                            setAssigning(false);
-                          }
+                        onClick={() => {
+                          setAttorneyToAssign(attorney);
+                          setConfirmAssignOpen(true);
                         }}
                         className="shrink-0 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground hover:opacity-90 disabled:opacity-50"
                       >
-                        {assigning ? "Asignando…" : "Asignar"}
+                        Revisar envio
                       </button>
                     </div>
                   );
@@ -708,6 +771,118 @@ const paginatedLogs = useMemo(() => {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={confirmAssignOpen}
+        onOpenChange={(next) => {
+          setConfirmAssignOpen(next);
+          if (!next) {
+            setAttorneyToAssign(null);
+            setAssignmentNotes("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Confirmar datos a enviar al abogado</DialogTitle>
+          </DialogHeader>
+
+          {!selected || !attorneyToAssign ? (
+            <div className="text-sm text-muted-foreground">
+              Selecciona una llamada y un abogado para continuar.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-4 text-sm space-y-2">
+                <div>
+                  <span className="text-muted-foreground">Abogado:</span>{" "}
+                  <span className="font-medium">{assignmentPreview?.attorneyName}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Correo:</span>{" "}
+                  <span className="font-medium">{assignmentPreview?.attorneyEmail}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Lead:</span>{" "}
+                  <span className="font-medium">{assignmentPreview?.leadName}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Telefono:</span>{" "}
+                  <span className="font-medium">{assignmentPreview?.leadPhone}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Tipo de caso:</span>{" "}
+                  <span className="font-medium">{assignmentPreview?.caseType}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Urgencia:</span>{" "}
+                  <span className="font-medium">{assignmentPreview?.urgency}</span>
+                </div>
+                <div className="pt-1">
+                  <span className="text-muted-foreground">Resumen:</span>
+                  <div className="mt-1 text-foreground/80">
+                    {assignmentPreview?.summary}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Notas adicionales para el correo</label>
+                <textarea
+                  value={assignmentNotes}
+                  onChange={(e) => setAssignmentNotes(e.target.value)}
+                  placeholder="Agrega instrucciones o contexto para el abogado..."
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm min-h-[96px]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmAssignOpen(false)}
+                  className="rounded-xl px-4 py-2 text-sm font-medium border border-border hover:bg-muted transition"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  disabled={assigning || !selectedLeadId || !attorneyToAssign}
+                  onClick={async () => {
+                    try {
+                      setAssigning(true);
+                      const r = await fetch(`/api/leads/${selectedLeadId}/assign-attorney`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          attorneyId: attorneyToAssign.id,
+                          retellCallId: selectedRetellCallId || undefined,
+                          assignmentNotes: assignmentNotes || undefined,
+                        }),
+                      });
+                      if (!r.ok) throw new Error(await r.text());
+
+                      setConfirmAssignOpen(false);
+                      setAssignOpen(false);
+                      setAttorneyToAssign(null);
+                      setAssignmentNotes("");
+                      await refetchCallLogs();
+                    } catch (e: any) {
+                      alert(e?.message ?? "Error enviando solicitud al abogado");
+                    } finally {
+                      setAssigning(false);
+                    }
+                  }}
+                  className="rounded-xl px-4 py-2 text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  {assigning ? "Enviando..." : "Confirmar y enviar"}
+                </button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+

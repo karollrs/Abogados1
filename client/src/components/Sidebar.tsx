@@ -4,20 +4,19 @@ import {
   Users as UsersIcon,
   Phone,
   Gavel,
-  Settings,
   LogOut,
   UserCog,
 } from "lucide-react";
 import { useLogout, useUser } from "@/hooks/use-auth";
 
-const baseNavigation = [
+const adminAgentNavigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Call Logs", href: "/calls", icon: Phone },
   { name: "Attorneys", href: "/attorneys", icon: Gavel },
   { name: "Leads", href: "/leads", icon: UsersIcon },
-
-  
 ];
+
+const abogadoNavigation = [{ name: "Mi llamada", href: "/attorney-call", icon: Phone }];
 
 export function Sidebar() {
   const [location] = useLocation();
@@ -25,6 +24,9 @@ export function Sidebar() {
   const logout = useLogout();
 
   // ✅ Solo admins ven "Usuarios"
+  const baseNavigation =
+    user?.role === "abogado" ? abogadoNavigation : adminAgentNavigation;
+
   const navigation = [
     ...baseNavigation,
     ...(user?.role === "admin"

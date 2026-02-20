@@ -25,10 +25,20 @@ export interface CallLog {
   agentId?: string;
   phoneNumber?: string;
   status?: string;
+  direction?: string;
   duration?: number;
   recordingUrl?: string;
   summary?: string;
   transcript?: string;
+  sentiment?: string;
+  analysis?: any;
+  pendingAttorneyId?: string;
+  assignmentStatus?: string;
+  assignmentNotes?: string;
+  assignmentRequestedAt?: number;
+  assignmentDecisionAt?: number;
+  assignmentDecisionByAttorneyId?: string;
+  assignmentDecisionNotes?: string;
   createdAt: Date | null;
 }
 
@@ -41,6 +51,7 @@ export interface Attorney {
   phone?: string;
   city?: string;
   stateProvince?: string;
+  notes?: string;
   specialties: string[];
   createdAt: Date | null;
 }
@@ -58,7 +69,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: string;
+  role: "admin" | "agent" | "abogado";
   isActive: number;
   createdAt: number;
   updatedAt: number;

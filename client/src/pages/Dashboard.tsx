@@ -32,11 +32,13 @@ export default function Dashboard() {
 
   const { data: callLogs } = useCallLogs();
   const pendientes = (callLogs || []).filter(
-    (c: any) => c.status === "pendiente"
+    (c: any) => c.status === "pendiente" || c.status === "rechazada_por_abogado"
   ).length;
 
   const enEspera = (callLogs || []).filter(
-    (c: any) => c.status === "en_espera_aceptacion"
+    (c: any) =>
+      c.status === "en_espera_aceptacion" ||
+      c.status === "pendiente_aprobacion_abogado"
   ).length;
 
   const asignadas = (callLogs || []).filter(

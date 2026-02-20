@@ -5,6 +5,7 @@ import Dashboard from "@/pages/Dashboard";
 
 import CallLogs from "@/pages/Calllogs";
 import Attorneys from "@/pages/Attorneys";
+import AttorneyCall from "@/pages/AttorneyCall";
 
 import Users from "@/pages/Users";
 
@@ -22,14 +23,35 @@ export default function App() {
         <Route path="/login" component={Login} />
 
         {/* Privado */}
-        <ProtectedRoute path="/" component={Dashboard} />
+        <ProtectedRoute
+          path="/"
+          component={Dashboard}
+          allowedRoles={["admin", "agent"]}
+        />
  
-        <ProtectedRoute path="/calls" component={CallLogs} />
-        <ProtectedRoute path="/attorneys" component={Attorneys} />
+        <ProtectedRoute
+          path="/calls"
+          component={CallLogs}
+          allowedRoles={["admin", "agent"]}
+        />
+        <ProtectedRoute
+          path="/attorney-call"
+          component={AttorneyCall}
+          allowedRoles={["admin", "abogado"]}
+        />
+        <ProtectedRoute
+          path="/attorneys"
+          component={Attorneys}
+          allowedRoles={["admin", "agent"]}
+        />
 
-        <ProtectedRoute path="/users" component={Users} />
+        <ProtectedRoute path="/users" component={Users} allowedRoles={["admin"]} />
 
-        <ProtectedRoute path="/leads" component={Leads} />
+        <ProtectedRoute
+          path="/leads"
+          component={Leads}
+          allowedRoles={["admin", "agent"]}
+        />
 
 
         {/* Fallback */}

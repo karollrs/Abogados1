@@ -25,8 +25,45 @@ export const listWithLead = query({
     return logs
       .map((log) => {
         const lead = log.leadId != null ? leadById.get(log.leadId) : undefined;
+        const recordingUrl =
+          (log as any).recordingUrl ??
+          (log as any).recording_url ??
+          (log as any).recording_url_public ??
+          (log as any).recording?.url ??
+          (log as any).recording?.recording_url ??
+          (log as any).recording?.recording_url_public ??
+          (log as any).recording?.public_url ??
+          (log as any).scrubbed_recording_url ??
+          (log as any).recording_multi_channel_url ??
+          (log as any).scrubbed_recording_multi_channel_url ??
+          (log as any).analysis?.recordingUrl ??
+          (log as any).analysis?.recording_url ??
+          (log as any).analysis?.recording_url_public ??
+          (log as any).analysis?.recording?.url ??
+          (log as any).analysis?.recording?.recording_url ??
+          (log as any).analysis?.recording?.recording_url_public ??
+          (log as any).analysis?.post_call_analysis?.recordingUrl ??
+          (log as any).analysis?.post_call_analysis?.recording_url ??
+          (log as any).analysis?.post_call_analysis?.recording_url_public ??
+          (log as any).analysis?.post_call_analysis?.recording?.url ??
+          (log as any).analysis?.scrubbed_recording_url ??
+          (log as any).analysis?.recording_multi_channel_url ??
+          (log as any).analysis?.scrubbed_recording_multi_channel_url ??
+          undefined;
+        const pendingAttorneyId =
+          (log as any).pendingAttorneyId ??
+          (log as any).analysis?.assignment?.requestedAttorneyId ??
+          null;
+        const assignmentStatus =
+          (log as any).assignmentStatus ??
+          (log as any).analysis?.assignment?.decision ??
+          null;
+
         return {
           ...log,
+          recordingUrl,
+          pendingAttorneyId,
+          assignmentStatus,
           leadId: lead?.id ?? log.leadId ?? null,
           leadName: lead?.name ?? null,
           caseType: lead?.caseType ?? null,

@@ -10,6 +10,8 @@ type AssignmentEmail = {
   leadPhone: string;
   caseType: string | null;
   urgency: string | null;
+  notes?: string;
+  callUrl?: string;
 };
 
 export async function sendAttorneyAssignmentEmail(data: AssignmentEmail) {
@@ -36,8 +38,18 @@ export async function sendAttorneyAssignmentEmail(data: AssignmentEmail) {
         <li><b>Teléfono:</b> ${data.leadPhone}</li>
         <li><b>Tipo de caso:</b> ${data.caseType ?? "General"}</li>
         <li><b>Urgencia:</b> ${data.urgency ?? "Medium"}</li>
+        ${
+          data.notes
+            ? `<li><b>Notas adicionales:</b> ${data.notes}</li>`
+            : ""
+        }
       </ul>
       <p>Ingresa al CRM para ver detalles.</p>
+      ${
+        data.callUrl
+          ? `<p><a href="${data.callUrl}" style="display:inline-block;padding:10px 16px;border-radius:10px;background:#111827;color:#fff;text-decoration:none">Ver llamada completa</a></p>`
+          : ""
+      }
     </div>
   `;
 

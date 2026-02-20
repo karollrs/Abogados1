@@ -12,7 +12,7 @@ export type SafeUser = {
   id: string;
   email: string;
   name: string;
-  role: "agent" | "admin";
+  role: "agent" | "admin" | "abogado";
 };
 
 type AuthRequest = Request & {
@@ -24,11 +24,18 @@ type AuthRequest = Request & {
 };
 
 function toSafeUser(u: any): SafeUser {
+  const role = String(u?.role ?? "")
+    .toLowerCase()
+    .trim();
+
   return {
     id: String(u.id),
     email: String(u.email),
     name: String(u.name),
-    role: u?.role === "admin" ? "admin" : "agent",
+    role:
+      role === "admin" || role === "abogado"
+        ? (role as "admin" | "abogado")
+        : "agent",
   };
 }
 
@@ -150,7 +157,9 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const r = req as AuthRequest;
   if (!r.isAuthenticated?.() || !r.user) return res.status(401).json({ message: "Unauthorized" });
 
-  const role = String((r.user as any)?.role || "agent");
+  const role = String((r.user as any)?.role || "agent")
+    .toLowerCase()
+    .trim();
   if (role !== "admin") return res.status(403).json({ message: "Forbidden" });
 
   return next();

@@ -54,6 +54,7 @@ export default function Attorneys() {
   const [phone, setPhone] = useState("");
   const [formCity, setFormCity] = useState("");
   const [formState, setFormState] = useState("");
+  const [formNotes, setFormNotes] = useState("");
   const [formSpecialties, setFormSpecialties] = useState<string[]>([]);
 
   const canSave = useMemo(() => !!norm(name) && !!norm(email), [name, email]);
@@ -77,6 +78,7 @@ export default function Attorneys() {
           phone: phone || null,
           city: formCity || null,
           state_province: formState || null,
+          notes: formNotes || null,
           specialties: formSpecialties,
         }),
       });
@@ -89,6 +91,7 @@ export default function Attorneys() {
       setPhone("");
       setFormCity("");
       setFormState("");
+      setFormNotes("");
       setFormSpecialties([]);
 
       await refetch();
@@ -252,6 +255,12 @@ export default function Attorneys() {
                           </div>
                         </div>
                       </div>
+
+                      {a.notes ? (
+                        <div className="mt-3 text-sm text-muted-foreground whitespace-pre-wrap">
+                          <span className="text-xs text-muted-foreground">Notas:</span> {a.notes}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -319,6 +328,16 @@ export default function Attorneys() {
                 value={formState}
                 onChange={(e) => setFormState(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2 md:col-span-2">
+              <label className="text-sm font-medium">Notas</label>
+              <textarea
+                value={formNotes}
+                onChange={(e) => setFormNotes(e.target.value)}
+                placeholder="Notas del abogado, condiciones o comentarios..."
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm min-h-[96px]"
               />
             </div>
           </div>

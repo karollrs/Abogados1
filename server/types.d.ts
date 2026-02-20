@@ -6,7 +6,7 @@ declare global {
       id: string;
       email: string;
       name: string;
-      role: "agent" | "admin";
+      role: "agent" | "admin" | "abogado";
     }
   }
 }

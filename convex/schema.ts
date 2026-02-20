@@ -11,7 +11,7 @@ export default defineSchema({
     id: v.string(), // uuid-like string used by session/auth
     email: v.string(),
     name: v.string(),
-    role: v.string(), // "admin" | "agent"
+    role: v.string(), // "admin" | "agent" | "abogado"
     passwordHash: v.string(),
     isActive: v.number(), // 1 active, 0 disabled
     createdAt: v.number(),
@@ -27,6 +27,7 @@ attorneys: defineTable({
   phone: v.optional(v.string()),
   city: v.optional(v.string()),
   stateProvince: v.optional(v.string()),
+  notes: v.optional(v.string()),
   specialties: v.array(v.string()),
   createdAt: v.number(),
 })
@@ -68,6 +69,13 @@ attorneys: defineTable({
     transcript: v.optional(v.string()),
     sentiment: v.optional(v.string()),
     analysis: v.optional(v.any()),
+    pendingAttorneyId: v.optional(v.string()),
+    assignmentStatus: v.optional(v.string()), // pending | accepted | rejected
+    assignmentNotes: v.optional(v.string()),
+    assignmentRequestedAt: v.optional(v.number()),
+    assignmentDecisionAt: v.optional(v.number()),
+    assignmentDecisionByAttorneyId: v.optional(v.string()),
+    assignmentDecisionNotes: v.optional(v.string()),
     createdAt: v.number(),
   })
     

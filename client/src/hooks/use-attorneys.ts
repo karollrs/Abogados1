@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 export type Attorney = {
-  id: number;
+  id: string | number;
   name: string;
   email: string;
   phone?: string | null;
   city?: string | null;
   stateProvince?: string | null;
+  notes?: string | null;
   specialties: string[];
   createdAt: string;
 };

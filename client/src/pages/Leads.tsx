@@ -74,7 +74,7 @@ export default function Leads() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const selectedLead = useMemo(() => {
-    return (leads ?? []).find((l) => l.id === selectedId) ?? null;
+    return (leads ?? []).find((l: any) => l.id === selectedId) ?? null;
   }, [leads, selectedId]);
 
   const relatedCalls = useMemo(() => {

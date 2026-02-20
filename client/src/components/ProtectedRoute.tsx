@@ -4,9 +4,11 @@ import { useUser } from "@/hooks/use-auth";
 export function ProtectedRoute({
   path,
   component: Component,
+  allowedRoles,
 }: {
   path: string;
   component: React.ComponentType<any>;
+  allowedRoles?: Array<"admin" | "agent" | "abogado">;
 }) {
   const { data: user, isLoading } = useUser();
 
@@ -23,6 +25,11 @@ export function ProtectedRoute({
 
         if (!user) {
           return <Redirect to="/login" />;
+        }
+
+        if (allowedRoles && !allowedRoles.includes(user.role)) {
+          if (user.role === "abogado") return <Redirect to="/attorney-call" />;
+          return <Redirect to="/" />;
         }
 
         return <Component />;
