@@ -552,8 +552,6 @@ export async function registerRoutes(
       const urgency = safeString(cad.urgency, "Medium");
       const mappedStatus = analyzed ? mapStatusFromAnalysis(analysis) : "New";
 
-      let lead = await storage.getLeadByRetellCallId(callId);
-
       const leadData: any = {
         retellCallId: callId,
         retellAgentId: agentId,
@@ -566,12 +564,8 @@ export async function registerRoutes(
         status: mappedStatus,
       };
 
-      if (lead) {
-        if (!analyzed) delete leadData.status;
-        await storage.updateLead(lead.id, leadData);
-      } else {
-        lead = await storage.createLead(leadData);
-      }
+      if (!analyzed) delete leadData.status;
+      const lead = await storage.upsertLeadByRetellCallId(callId, leadData);
 
       const logUpdates: any = {
         leadId: lead.id,

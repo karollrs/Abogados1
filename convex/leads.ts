@@ -147,3 +147,67 @@ export const assignAttorney = mutation({
     return await ctx.db.get(lead._id);
   },
 });
+
+export const upsertByRetellCallId = mutation({
+  args: {
+    retellCallId: v.string(),
+    updates: v.any(),
+  },
+  handler: async (ctx, { retellCallId, updates }) => {
+    const existing = await ctx.db
+      .query("leads")
+      .withIndex("by_retellCallId", (q) => q.eq("retellCallId", retellCallId))
+      .unique();
+
+    const allowed = [
+      "name",
+      "phone",
+      "caseType",
+      "urgency",
+      "status",
+      "attorneyId",
+      "retellAgentId",
+      "summary",
+      "transcript",
+      "lastContactedAt",
+    ];
+
+    const patch: any = {};
+    for (const k of allowed) {
+      if (updates?.[k] !== undefined) patch[k] = updates[k];
+    }
+
+    if (!existing) {
+      const newId = await nextId(ctx, "leads");
+      const now = Date.now();
+
+      await ctx.db.insert("leads", {
+        id: newId,
+        retellCallId,
+        retellAgentId: patch.retellAgentId,
+        name: patch.name ?? "AI Lead",
+        phone: patch.phone ?? "Unknown",
+        caseType: patch.caseType,
+        urgency: patch.urgency,
+        status: patch.status ?? "New",
+        summary: patch.summary,
+        transcript: patch.transcript,
+        attorneyId: patch.attorneyId,
+        lastContactedAt: patch.lastContactedAt,
+        createdAt: now,
+      });
+
+      return await ctx.db
+        .query("leads")
+        .withIndex("by_retellCallId", (q) => q.eq("retellCallId", retellCallId))
+        .unique();
+    }
+
+    await ctx.db.patch(existing._id, {
+      retellCallId,
+      ...patch,
+    });
+
+    return await ctx.db.get(existing._id);
+  },
+});
