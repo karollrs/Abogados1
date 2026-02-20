@@ -77,34 +77,21 @@ export class ConvexStorage implements IStorage {
       search: search || undefined,
       status: status && status !== "All" ? status : undefined,
     });
-    // Convert timestamps to Date objects to match old shape if needed
-    return rows.map((l) => ({
-      ...l,
-      createdAt: l.createdAt ? new Date(l.createdAt) : null,
-      lastContactedAt: l.lastContactedAt ? new Date(l.lastContactedAt) : null,
-    })) as any;
+    return rows as any;
   }
 
   async getLead(id: number): Promise<Lead | undefined> {
     const { client, api } = convexClient();
     const l: any = await client.query(api.leads.get, { id });
     if (!l) return undefined;
-    return {
-      ...l,
-      createdAt: l.createdAt ? new Date(l.createdAt) : null,
-      lastContactedAt: l.lastContactedAt ? new Date(l.lastContactedAt) : null,
-    } as any;
+    return l as any;
   }
 
   async getLeadByRetellCallId(retellCallId: string): Promise<Lead | undefined> {
     const { client, api } = convexClient();
     const l: any = await client.query(api.leads.getByRetellCallId, { retellCallId });
     if (!l) return undefined;
-    return {
-      ...l,
-      createdAt: l.createdAt ? new Date(l.createdAt) : null,
-      lastContactedAt: l.lastContactedAt ? new Date(l.lastContactedAt) : null,
-    } as any;
+    return l as any;
   }
 
   async createLead(lead: InsertLead): Promise<Lead> {
@@ -121,11 +108,7 @@ export class ConvexStorage implements IStorage {
       summary: (lead as any).summary ?? undefined,
       transcript: (lead as any).transcript ?? undefined,
     });
-    return {
-      ...created,
-      createdAt: created.createdAt ? new Date(created.createdAt) : null,
-      lastContactedAt: created.lastContactedAt ? new Date(created.lastContactedAt) : null,
-    } as any;
+    return created as any;
   }
 
   async updateLead(id: number, updates: UpdateLeadRequest): Promise<Lead> {
@@ -134,21 +117,13 @@ export class ConvexStorage implements IStorage {
     // convert Date -> number
     if ((mapped as any).lastContactedAt instanceof Date) mapped.lastContactedAt = (mapped as any).lastContactedAt.getTime();
     const updated: any = await client.mutation(api.leads.update, { id, updates: mapped });
-    return {
-      ...updated,
-      createdAt: updated.createdAt ? new Date(updated.createdAt) : null,
-      lastContactedAt: updated.lastContactedAt ? new Date(updated.lastContactedAt) : null,
-    } as any;
+    return updated as any;
   }
 
   async assignAttorneyToLead(leadId: number, attorneyId: string): Promise<Lead> {
     const { client, api } = convexClient();
     const updated: any = await client.mutation(api.leads.assignAttorney, { id: leadId, attorneyId });
-    return {
-      ...updated,
-      createdAt: updated.createdAt ? new Date(updated.createdAt) : null,
-      lastContactedAt: updated.lastContactedAt ? new Date(updated.lastContactedAt) : null,
-    } as any;
+    return updated as any;
   }
 
   // -------------------------
