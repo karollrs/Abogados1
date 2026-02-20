@@ -33,6 +33,38 @@ export const list = query({
   },
 });
 
+export const upsertByRetellCallId = mutation({
+  args: {
+    retellCallId: v.string(),
+    data: v.any(),
+  },
+  handler: async (ctx, { retellCallId, data }) => {
+    const existing = await ctx.db
+      .query("leads")
+      .withIndex("by_retellCallId", q =>
+        q.eq("retellCallId", retellCallId)
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, data);
+      return await ctx.db.get(existing._id);
+    }
+
+    const newId = await nextId(ctx, "leads");
+
+    const insertedId = await ctx.db.insert("leads", {
+      id: newId,
+      ...data,
+      retellCallId,
+      createdAt: Date.now(),
+    });
+
+    return await ctx.db.get(insertedId);
+  },
+});
+
+
 export const get = query({
   args: { id: v.number() },
   handler: async (ctx, { id }) => {

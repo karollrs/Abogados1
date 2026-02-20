@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { MoreHorizontal, Phone, AlertCircle } from "lucide-react";
-import { type Lead } from "@shared/schema";
+import { type Lead } from "@shared/types";
 
 import { useLocation } from "wouter";
 

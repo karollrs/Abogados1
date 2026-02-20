@@ -17,7 +17,8 @@ export function useLeads(search?: string, status?: string) {
       
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch leads");
-      return api.leads.list.responses[200].parse(await res.json());
+      return await res.json();
+
     },
   });
 }

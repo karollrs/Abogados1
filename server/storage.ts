@@ -10,7 +10,7 @@ import type {
   Attorney,
   InsertAttorney,
   User,
-} from "@shared/schema";
+} from "@shared/types";
 import type { Id } from "../convex/_generated/dataModel";
 
 
@@ -230,6 +230,14 @@ export class ConvexStorage implements IStorage {
     });
     return { ...created, createdAt: created.createdAt ? new Date(created.createdAt) : null } as any;
   }
+
+  async upsertLeadByRetellCallId(retellCallId: string, data: any) {
+  const { client, api } = convexClient();
+  return await client.mutation(api.leads.upsertByRetellCallId, {
+    retellCallId,
+    data,
+  });
+}
 
   // -------------------------
   // Stats

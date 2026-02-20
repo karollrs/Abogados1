@@ -12,6 +12,8 @@ import { useLeads, useStats } from "@/hooks/use-leads";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useMemo, useState } from "react";
 import { useCallLogs } from "@/hooks/use-call-logs";
+import type { Lead } from "@shared/types";
+
 
 
 
@@ -26,6 +28,8 @@ const chartData = [
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useStats();
   const { data: leads, isLoading: leadsLoading } = useLeads();
+  console.log("LEADS FROM HOOK:", leads);
+
   const { data: callLogs } = useCallLogs();
   const pendientes = (callLogs || []).filter(
     (c: any) => c.status === "pendiente"
@@ -40,7 +44,7 @@ export default function Dashboard() {
   ).length;
 
   const [search, setSearch] = useState("");
-  const filteredLeads = useMemo(() => {
+  const filteredLeads: Lead[] = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return leads || [];
 

@@ -21,12 +21,12 @@ function pickFirstString(...values: any[]): string | undefined {
 
 function mapStatusFromAnalysis(
   analysis: any
-): "New" | "Qualified" | "Converted" | "Disqualified" {
-  if (analysis?.call_successful === true) return "Converted";
-  if (analysis?.user_sentiment === "Positive") return "Qualified";
-  if (analysis?.user_sentiment === "Negative") return "Disqualified";
-  return "New";
+): "pendiente" | "en_espera_aceptacion" | "asignada" {
+  if (analysis?.call_successful === true) return "asignada";
+  if (analysis?.user_sentiment === "Positive") return "en_espera_aceptacion";
+  return "pendiente";
 }
+
 
 function normalizeEvent(event: any): string {
   return String(event || "").trim().toLowerCase();
@@ -443,7 +443,10 @@ export async function registerRoutes(
       const leadName = safeString(cad.name, "AI Lead");
       const caseType = safeString(cad.case_type, "General");
       const urgency = safeString(cad.urgency, "Medium");
-      const mappedStatus = analyzed ? mapStatusFromAnalysis(analysis) : "New";
+      const mappedStatus = analyzed
+  ? mapStatusFromAnalysis(analysis)
+  : "pendiente";
+
 
       let lead = await storage.getLeadByRetellCallId(callId);
 
@@ -479,9 +482,8 @@ export async function registerRoutes(
         analysis,
       };
 
-      const existingLog = await storage.getCallLogByRetellCallId(callId);
-      if (existingLog) await storage.updateCallLogByRetellCallId(callId, logUpdates);
-      else await storage.createCallLog(logUpdates);
+      await storage.updateCallLogByRetellCallId(callId, logUpdates);
+
 
       return res.json({ success: true });
     } catch (err) {
