@@ -28,7 +28,7 @@ export function ProtectedRoute({
         }
 
         if (allowedRoles && !allowedRoles.includes(user.role)) {
-          if (user.role === "abogado") return <Redirect to="/attorney-call" />;
+          if (user.role === "abogado") return <Redirect to="/" />;
           return <Redirect to="/" />;
         }
 

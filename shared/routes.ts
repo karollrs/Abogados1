@@ -69,6 +69,13 @@ export const callLogSchema = z.object({
   summary: z.string().optional(),
   transcript: z.string().optional(),
   sentiment: z.string().optional(),
+  city: z.string().optional(),
+  stateProvince: z.string().optional(),
+  location: z.string().optional(),
+  email: z.string().optional(),
+  address: z.string().optional(),
+  caseType: z.string().optional(),
+  caseNotes: z.string().optional(),
 
   analysis: z.any().optional(),
 

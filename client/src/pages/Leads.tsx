@@ -27,10 +27,38 @@ function fmtDate(ts?: number | null) {
   }
 }
 
-function statusBadge(status?: string | null) {
-  if (!status) return <Badge variant="outline">Pendiente</Badge>;
+function normalizeLeadStatus(status?: string | null) {
+  const s = String(status ?? "")
+    .trim()
+    .toLowerCase();
 
-  if (status === "pendiente") {
+  if (!s || s === "new" || s === "pending" || s === "pendiente") {
+    return "pendiente";
+  }
+
+  if (
+    s === "en_espera_aceptacion" ||
+    s === "en espera de aceptacion" ||
+    s === "en revision" ||
+    s === "en_revision" ||
+    s === "review" ||
+    s === "in_review" ||
+    s === "pendiente_aprobacion_abogado"
+  ) {
+    return "en_espera_aceptacion";
+  }
+
+  if (s === "asignada" || s === "assigned") {
+    return "asignada";
+  }
+
+  return s;
+}
+
+function statusBadge(status?: string | null) {
+  const normalized = normalizeLeadStatus(status);
+
+  if (normalized === "pendiente") {
     return (
       <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
         Pendiente
@@ -38,7 +66,7 @@ function statusBadge(status?: string | null) {
     );
   }
 
-  if (status === "en_espera_aceptacion") {
+  if (normalized === "en_espera_aceptacion") {
     return (
       <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
         En revisión
@@ -46,7 +74,7 @@ function statusBadge(status?: string | null) {
     );
   }
 
-  if (status === "asignada") {
+  if (normalized === "asignada") {
     return (
       <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
         Asignada
@@ -54,7 +82,7 @@ function statusBadge(status?: string | null) {
     );
   }
 
-  return <Badge variant="outline">{status}</Badge>;
+  return <Badge variant="outline">{status ?? "Pendiente"}</Badge>;
 }
 
 
@@ -260,7 +288,7 @@ export default function Leads() {
                                   </div>
 
                                   <Badge variant="outline" className="text-xs">
-                                    Ver detalle
+                                    Ver detalle ⬅️
                                   </Badge>
                                 </div>
                               </button>

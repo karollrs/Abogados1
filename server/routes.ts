@@ -1,9 +1,10 @@
-﻿import type { Express } from "express";
+import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { requireAuth, requireAdmin } from "./auth";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import { sendAttorneyAssignmentEmail } from "./mailer";
 
 /* ============================================================
@@ -21,6 +22,10 @@ function pickFirstString(...values: any[]): string | undefined {
     if (typeof v === "string" && v.trim().length > 0) return v;
   }
   return undefined;
+}
+
+function hasOwn(obj: any, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 }
 
 function extractRecordingUrl(
@@ -139,6 +144,61 @@ function normalizeUserRole(v: any): "admin" | "agent" | "abogado" | null {
     .trim();
   if (role === "admin" || role === "agent" || role === "abogado") return role;
   return null;
+}
+
+function normalizeEmail(v: any): string {
+  return safeString(v).toLowerCase().trim();
+}
+
+function callLogMatchesAttorney(log: any, attorneyId: string): boolean {
+  const cleanAttorneyId = safeString(attorneyId).trim();
+  if (!cleanAttorneyId) return false;
+  const assignedAttorneyId = safeString(log?.attorneyId).trim();
+  const pendingAttorneyId = safeString((log as any)?.pendingAttorneyId).trim();
+  return assignedAttorneyId === cleanAttorneyId || pendingAttorneyId === cleanAttorneyId;
+}
+
+function computeDashboardStatsFromLeads(leads: any[]) {
+  const totalLeads = leads.length;
+  const qualifiedLeads = leads.filter(
+    (l) => safeString((l as any)?.status).toLowerCase() === "en_espera_aceptacion"
+  ).length;
+  const convertedLeads = leads.filter(
+    (l) => safeString((l as any)?.status).toLowerCase() === "asignada"
+  ).length;
+  const diffs = leads
+    .map((l) =>
+      (l as any)?.lastContactedAt && (l as any)?.createdAt
+        ? toTimeMs((l as any).lastContactedAt) - toTimeMs((l as any).createdAt)
+        : null
+    )
+    .filter((x): x is number => typeof x === "number" && x > 0);
+  const avgMs = diffs.length ? diffs.reduce((a, b) => a + b, 0) / diffs.length : 0;
+  return {
+    totalLeads,
+    qualifiedLeads,
+    convertedLeads,
+    avgResponseTimeMinutes: Math.round(avgMs / 60000),
+  };
+}
+
+async function resolveAttorneyIdForUser(user: any): Promise<string | null> {
+  const userId = safeString(user?.id).trim();
+  if (userId) {
+    const attorneyById = await storage.getAttorney(userId);
+    const attorneyIdById = safeString((attorneyById as any)?.id).trim();
+    if (attorneyIdById) return attorneyIdById;
+  }
+
+  const userEmail = normalizeEmail(user?.email);
+  if (!userEmail) return null;
+
+  const attorneys = await storage.getAttorneys({ q: userEmail });
+  const me = attorneys.find(
+    (a: any) => normalizeEmail((a as any)?.email) === userEmail
+  );
+  const attorneyIdByEmail = safeString((me as any)?.id).trim();
+  return attorneyIdByEmail || null;
 }
 
 function toPublicUser(u: any) {
@@ -306,9 +366,72 @@ export async function registerRoutes(
 
   /* ================= CALL LOGS ================= */
 
-  app.get("/api/call-logs", async (_req, res) => {
+  app.get("/api/call-logs", async (req: any, res) => {
     const logs = await storage.getCallLogs();
-    res.json(logs);
+    const role = normalizeUserRole(req.user?.role) ?? "agent";
+    if (role !== "abogado") return res.json(logs);
+
+    const attorneyId = await resolveAttorneyIdForUser(req.user);
+    if (!attorneyId) return res.json([]);
+
+    const filtered = logs.filter((log: any) => callLogMatchesAttorney(log, attorneyId));
+    return res.json(filtered);
+  });
+
+  app.patch("/api/call-logs/:retellCallId/details", async (req, res) => {
+    try {
+      const retellCallId = safeString(req.params.retellCallId).trim();
+      if (!retellCallId) {
+        return res.status(400).json({ message: "retellCallId es obligatorio" });
+      }
+
+      const existing = await storage.getCallLogByRetellCallId(retellCallId);
+      if (!existing) {
+        return res.status(404).json({ message: "Call log no encontrado" });
+      }
+
+      const updates: Record<string, string> = {};
+      const mapField = (key: string) => {
+        if (hasOwn(req.body, key)) {
+          updates[key] = safeString(req.body?.[key]).trim();
+        }
+      };
+
+      mapField("email");
+      mapField("address");
+      mapField("city");
+      if (hasOwn(req.body, "state")) {
+        updates.stateProvince = safeString(req.body?.state).trim();
+      }
+      mapField("stateProvince");
+      mapField("location");
+      mapField("caseType");
+      mapField("caseNotes");
+
+      if (!Object.keys(updates).length) {
+        return res.status(400).json({ message: "No hay campos para actualizar" });
+      }
+
+      const updatedCall = await storage.updateCallLogByRetellCallId(
+        retellCallId,
+        updates as any
+      );
+
+      if (hasOwn(updates, "caseType")) {
+        const leadId = Number((updatedCall as any)?.leadId ?? 0);
+        if (Number.isFinite(leadId) && leadId > 0) {
+          await storage.updateLead(leadId, {
+            caseType: updates.caseType,
+          } as any);
+        }
+      }
+
+      return res.json(updatedCall);
+    } catch (err: any) {
+      return res
+        .status(500)
+        .json({ message: err?.message ?? "Failed to update call details" });
+    }
   });
 
   /* ================= LEADS ================= */
@@ -320,9 +443,47 @@ export async function registerRoutes(
     res.json(leads);
   });
 
-  app.get(api.leads.stats.path, async (_req, res) => {
-    const stats = await storage.getDashboardStats();
-    res.json(stats);
+  app.get(api.leads.stats.path, async (req: any, res) => {
+    const role = normalizeUserRole(req.user?.role) ?? "agent";
+    if (role !== "abogado") {
+      const stats = await storage.getDashboardStats();
+      return res.json(stats);
+    }
+
+    const attorneyId = await resolveAttorneyIdForUser(req.user);
+    if (!attorneyId) {
+      return res.json({
+        totalLeads: 0,
+        qualifiedLeads: 0,
+        convertedLeads: 0,
+        avgResponseTimeMinutes: 0,
+      });
+    }
+
+    const [allLeads, logs] = await Promise.all([
+      storage.getLeads(),
+      storage.getCallLogs(),
+    ]);
+
+    const relatedLeadIds = new Set<number>();
+    for (const log of logs) {
+      if (!callLogMatchesAttorney(log, attorneyId)) continue;
+      const leadId = Number((log as any)?.leadId);
+      if (Number.isFinite(leadId) && leadId > 0) {
+        relatedLeadIds.add(leadId);
+      }
+    }
+
+    const myLeads = allLeads.filter((lead: any) => {
+      const leadAttorneyId = safeString((lead as any)?.attorneyId).trim();
+      const leadId = Number((lead as any)?.id);
+      return (
+        leadAttorneyId === attorneyId ||
+        (Number.isFinite(leadId) && relatedLeadIds.has(leadId))
+      );
+    });
+
+    return res.json(computeDashboardStatsFromLeads(myLeads));
   });
 
   app.post("/api/leads/:id/assign-attorney", async (req, res) => {
@@ -442,9 +603,6 @@ export async function registerRoutes(
         return res.status(400).json({ message: "decision invalida" });
       }
       const role = normalizeUserRole(req.user?.role) ?? "agent";
-      const userEmail = String(req.user?.email ?? "")
-        .toLowerCase()
-        .trim();
       if (role !== "abogado" && role !== "admin") {
         return res.status(403).json({ message: "No autorizado" });
       }
@@ -454,17 +612,11 @@ export async function registerRoutes(
       }
       let actingAttorneyId = safeString((call as any).pendingAttorneyId).trim();
       if (role === "abogado") {
-        const attorneys = await storage.getAttorneys({ q: userEmail });
-        const me = attorneys.find(
-          (a: any) =>
-            String(a?.email ?? "")
-              .toLowerCase()
-              .trim() === userEmail
-        );
-        if (!me) {
+        const resolvedAttorneyId = await resolveAttorneyIdForUser(req.user);
+        if (!resolvedAttorneyId) {
           return res.status(403).json({ message: "No encuentro tu perfil de abogado" });
         }
-        actingAttorneyId = String((me as any).id ?? "");
+        actingAttorneyId = resolvedAttorneyId;
         const pendingAttorneyId = safeString((call as any).pendingAttorneyId).trim();
         if (pendingAttorneyId && pendingAttorneyId !== actingAttorneyId) {
           return res.status(403).json({ message: "Esta llamada no esta asignada para ti" });
@@ -538,17 +690,48 @@ export async function registerRoutes(
   app.post("/api/attorneys", async (req, res) => {
     try {
       const name = safeString(req.body?.name).trim();
-      const email = safeString(req.body?.email).trim();
+      const email = normalizeEmail(req.body?.email);
+      const password = safeString(req.body?.password);
       const notes = safeString(req.body?.notes).trim();
+      const requestedId = safeString(req.body?.id).trim();
+      const sharedId = requestedId || randomUUID();
 
-      if (!name || !email) {
+      if (!name || !email || password.length < 8) {
         return res
           .status(400)
-          .json({ message: "name y email son obligatorios" });
+          .json({ message: "name, email y password (>=8) son obligatorios" });
       }
 
-      const created = await storage.createAttorney({
-        id: safeString(req.body?.id).trim() || undefined,
+      const [existingUserByEmail, attorneysByEmail] = await Promise.all([
+        storage.getUserByEmail(email),
+        storage.getAttorneys({ q: email }),
+      ]);
+      const existingAttorneyByEmail = attorneysByEmail.find(
+        (a: any) => normalizeEmail((a as any)?.email) === email
+      );
+
+      if (existingAttorneyByEmail) {
+        return res.status(409).json({ message: "Ya existe un abogado con ese email" });
+      }
+      if (existingUserByEmail) {
+        return res.status(409).json({ message: "Ya existe un usuario con ese email" });
+      }
+
+      if (requestedId) {
+        const [existingUserById, existingAttorneyById] = await Promise.all([
+          storage.getUserById(sharedId),
+          storage.getAttorney(sharedId),
+        ]);
+        if (existingUserById) {
+          return res.status(409).json({ message: "Ese id ya existe en users" });
+        }
+        if (existingAttorneyById) {
+          return res.status(409).json({ message: "Ese id ya existe en attorneys" });
+        }
+      }
+
+      const createdAttorney = await storage.createAttorney({
+        id: sharedId,
         name,
         email,
         phone: pickFirstString(req.body?.phone, undefined),
@@ -564,7 +747,19 @@ export async function registerRoutes(
           : [],
       } as any);
 
-      return res.status(201).json(created);
+      const passwordHash = await bcrypt.hash(password, 10);
+      const createdUser = await storage.createUser({
+        id: sharedId,
+        email,
+        name,
+        role: "abogado",
+        passwordHash,
+      });
+
+      return res.status(201).json({
+        attorney: createdAttorney,
+        user: toPublicUser(createdUser),
+      });
     } catch (err: any) {
       return res
         .status(500)
@@ -575,28 +770,18 @@ export async function registerRoutes(
   app.get("/api/attorney/assigned-call", async (req: any, res) => {
     try {
       const role = normalizeUserRole(req.user?.role) ?? "agent";
-      const userEmail = String(req.user?.email ?? "")
-        .toLowerCase()
-        .trim();
       const requestedAttorneyId = safeString(req.query.attorneyId).trim();
       const callId = safeString(req.query.callId).trim();
 
       let attorneyId = requestedAttorneyId;
 
       if (role !== "admin") {
-        const attorneys = await storage.getAttorneys({ q: userEmail });
-        const me = attorneys.find(
-          (a: any) =>
-            String(a?.email ?? "")
-              .toLowerCase()
-              .trim() === userEmail
-        );
-
-        if (!me) {
+        const resolvedAttorneyId = await resolveAttorneyIdForUser(req.user);
+        if (!resolvedAttorneyId) {
           return res.json({ call: null, attorneyId: null });
         }
 
-        attorneyId = String((me as any).id ?? "");
+        attorneyId = resolvedAttorneyId;
       }
 
       const logs = await storage.getCallLogs();
@@ -682,15 +867,22 @@ export async function registerRoutes(
         call,
         analysisFromWebhook
       );
+      
       const shouldTryRetellLookup =
-        !!callId &&
-        (isAnalyzedEvent(event) || isFinalEvent(event)) &&
-        (!provisionalRecordingUrl ||
-          transcriptFromWebhook.trim().length === 0 ||
-          Object.keys(analysisFromWebhook || {}).length === 0);
+  !!callId &&
+  (isAnalyzedEvent(event) || isFinalEvent(event)) &&
+  !provisionalRecordingUrl;
+
       const retellCallDetails = shouldTryRetellLookup
         ? await fetchRetellCallById(callId)
         : null;
+        console.log(
+  `[RETELL DEBUG] lookup callId=${callId} hasRecording=${Boolean(
+    retellCallDetails?.recording_url ||
+    retellCallDetails?.recordingUrl ||
+    retellCallDetails?.scrubbed_recording_url
+  )}`
+);
 
       const analysis =
         Object.keys(analysisFromWebhook || {}).length > 0
@@ -711,12 +903,22 @@ export async function registerRoutes(
           ? Math.round(durationMs / 1000)
           : 0;
 
-      const recordingUrl = extractRecordingUrl(
-        payload,
-        call,
-        analysis,
-        retellCallDetails
-      );
+      let recordingUrl = extractRecordingUrl(
+  payload,
+  call,
+  analysis,
+  retellCallDetails
+);
+
+if (!recordingUrl && retellCallDetails) {
+  recordingUrl = pickFirstString(
+    retellCallDetails.recording_url,
+    retellCallDetails.recordingUrl,
+    retellCallDetails.scrubbed_recording_url,
+    retellCallDetails.recording_multi_channel_url,
+    retellCallDetails.scrubbed_recording_multi_channel_url
+  );
+}
       const looksProcessable =
         isAnalyzedEvent(event) ||
         isFinalEvent(event) ||
@@ -728,8 +930,59 @@ export async function registerRoutes(
         return res.json({ success: true });
       }
 
+      const existingCall = await storage.getCallLogByRetellCallId(callId);
       const cad = analysis.custom_analysis_data || {};
+      const postData = analysis.post_call_data || {};
       const leadName = safeString(cad.name, "").trim();
+      const city =
+        pickFirstString(
+          cad.city,
+          postData.city,
+          analysis.city,
+          (existingCall as any)?.city
+        ) ?? "";
+      const stateProvince =
+        pickFirstString(
+          cad.state,
+          cad.state_province,
+          postData.state,
+          postData.state_province,
+          analysis.state,
+          analysis.state_province,
+          (existingCall as any)?.stateProvince
+        ) ?? "";
+      const location =
+        pickFirstString(
+          cad.location,
+          cad.ubicacion,
+          postData.location,
+          analysis.location,
+          [city, stateProvince].filter(Boolean).join(", ")
+        ) ?? "";
+      const email =
+        pickFirstString(
+          cad.email,
+          cad.correo,
+          postData.email,
+          analysis.email,
+          (existingCall as any)?.email
+        ) ?? "";
+      const address =
+        pickFirstString(
+          cad.address,
+          cad.direccion,
+          postData.address,
+          postData.direccion,
+          analysis.address,
+          (existingCall as any)?.address
+        ) ?? "";
+      const caseType =
+        pickFirstString(
+          cad.case_type,
+          postData.case_type,
+          analysis.case_type,
+          (existingCall as any)?.caseType
+        ) ?? "";
 
       const normalizedName = leadName
         .toLowerCase()
@@ -754,7 +1007,6 @@ export async function registerRoutes(
       const isValidCall =
         !isFakeName && hasConversation && isSuccessful;
 
-      const existingCall = await storage.getCallLogByRetellCallId(callId);
       const existingStatus = String((existingCall as any)?.status ?? "").toLowerCase();
       const protectedStatuses = new Set([
         "pendiente_aprobacion_abogado",
@@ -775,6 +1027,12 @@ export async function registerRoutes(
             (existingCall as any)?.recordingUrl,
             (existingCall as any)?.recording_url
           ),
+        city,
+        stateProvince,
+        location,
+        email,
+        address,
+        caseType,
         transcript,
         summary:
           safeString(analysis?.call_summary) ||
@@ -802,7 +1060,7 @@ export async function registerRoutes(
         retellCallId: callId,
         name: leadName,
         phone: safeString(call.from_number, "Unknown"),
-        caseType: safeString(cad.case_type, "General"),
+        caseType: caseType || "General",
         urgency: safeString(cad.urgency, "Medium"),
         transcript,
         summary:
@@ -844,4 +1102,3 @@ export async function registerRoutes(
 
   return httpServer;
 }
-

@@ -26,7 +26,7 @@ export default function App() {
         <ProtectedRoute
           path="/"
           component={Dashboard}
-          allowedRoles={["admin", "agent"]}
+          allowedRoles={["admin", "agent", "abogado"]}
         />
  
         <ProtectedRoute

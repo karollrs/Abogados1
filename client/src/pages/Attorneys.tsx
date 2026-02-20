@@ -51,13 +51,17 @@ export default function Attorneys() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [formCity, setFormCity] = useState("");
   const [formState, setFormState] = useState("");
   const [formNotes, setFormNotes] = useState("");
   const [formSpecialties, setFormSpecialties] = useState<string[]>([]);
 
-  const canSave = useMemo(() => !!norm(name) && !!norm(email), [name, email]);
+  const canSave = useMemo(
+    () => !!norm(name) && !!norm(email) && password.length >= 8,
+    [name, email, password]
+  );
 
   function toggleSpecialty(s: string) {
     setFormSpecialties((prev) =>
@@ -75,6 +79,7 @@ export default function Attorneys() {
         body: JSON.stringify({
           name,
           email,
+          password,
           phone: phone || null,
           city: formCity || null,
           state_province: formState || null,
@@ -88,6 +93,7 @@ export default function Attorneys() {
       setOpen(false);
       setName("");
       setEmail("");
+      setPassword("");
       setPhone("");
       setFormCity("");
       setFormState("");
@@ -292,6 +298,17 @@ export default function Attorneys() {
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">Contrasena de acceso *</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimo 8 caracteres"
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm"
               />
             </div>

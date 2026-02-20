@@ -2,29 +2,57 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { nextId } from "./helpers";
 
+function normalizeLeadStatus(value: unknown): string {
+  const s = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!s || s === "new" || s === "pending" || s === "pendiente") {
+    return "pendiente";
+  }
+
+  if (
+    s === "en_espera_aceptacion" ||
+    s === "en espera de aceptacion" ||
+    s === "en revision" ||
+    s === "en_revision" ||
+    s === "review" ||
+    s === "in_review" ||
+    s === "pendiente_aprobacion_abogado"
+  ) {
+    return "en_espera_aceptacion";
+  }
+
+  if (s === "asignada" || s === "assigned") {
+    return "asignada";
+  }
+
+  return s;
+}
+
 export const list = query({
   args: { search: v.optional(v.string()), status: v.optional(v.string()) },
   handler: async (ctx, { search, status }) => {
-    let rows;
-
-    if (status) {
-      rows = await ctx.db
-        .query("leads")
-        .withIndex("by_status", (q) => q.eq("status", status))
-        .collect();
-    } else {
-      rows = await ctx.db.query("leads").collect();
-    }
+    const rows = await ctx.db.query("leads").collect();
+    const statusFilter = normalizeLeadStatus(status);
+    const normalizedRows = rows.map((l) => ({
+      ...l,
+      status: normalizeLeadStatus(l.status),
+    }));
 
     const s = (search ?? "").toLowerCase().trim();
 
-    const sorted = rows.sort(
+    const sorted = normalizedRows.sort(
       (a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)
     );
 
-    if (!s) return sorted;
+    const statusFiltered = statusFilter
+      ? sorted.filter((l) => normalizeLeadStatus(l.status) === statusFilter)
+      : sorted;
 
-    return sorted.filter((l) => {
+    if (!s) return statusFiltered;
+
+    return statusFiltered.filter((l) => {
       const hay = `${l.name} ${l.phone} ${l.caseType ?? ""} ${
         l.urgency ?? ""
       }`.toLowerCase();

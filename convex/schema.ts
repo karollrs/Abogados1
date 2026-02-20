@@ -68,6 +68,13 @@ attorneys: defineTable({
     summary: v.optional(v.string()),
     transcript: v.optional(v.string()),
     sentiment: v.optional(v.string()),
+    city: v.optional(v.string()),
+    stateProvince: v.optional(v.string()),
+    location: v.optional(v.string()),
+    email: v.optional(v.string()),
+    address: v.optional(v.string()),
+    caseType: v.optional(v.string()),
+    caseNotes: v.optional(v.string()),
     analysis: v.optional(v.any()),
     pendingAttorneyId: v.optional(v.string()),
     assignmentStatus: v.optional(v.string()), // pending | accepted | rejected

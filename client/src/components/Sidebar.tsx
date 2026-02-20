@@ -16,7 +16,10 @@ const adminAgentNavigation = [
   { name: "Leads", href: "/leads", icon: UsersIcon },
 ];
 
-const abogadoNavigation = [{ name: "Mi llamada", href: "/attorney-call", icon: Phone }];
+const abogadoNavigation = [
+  { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Mis casos", href: "/attorney-call", icon: Phone },
+];
 
 export function Sidebar() {
   const [location] = useLocation();

@@ -66,7 +66,7 @@ export const listWithLead = query({
           assignmentStatus,
           leadId: lead?.id ?? log.leadId ?? null,
           leadName: lead?.name ?? null,
-          caseType: lead?.caseType ?? null,
+          caseType: lead?.caseType ?? (log as any).caseType ?? null,
           urgency: lead?.urgency ?? null,
           attorneyId: lead?.attorneyId ?? null,
         };

@@ -3,34 +3,34 @@ import {
   CheckCircle,
   TrendingUp,
   Clock,
-  Search
+  Search,
+  UserCheck,
+  XCircle,
 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+
 import { Sidebar } from "@/components/Sidebar";
 import { StatsCard } from "@/components/StatsCard";
 import { LeadsTable } from "@/components/LeadsTable";
-import { useLeads, useStats } from "@/hooks/use-leads";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { useMemo, useState } from "react";
+import { useUser } from "@/hooks/use-auth";
 import { useCallLogs } from "@/hooks/use-call-logs";
+import { useLeads, useStats } from "@/hooks/use-leads";
 import type { Lead } from "@shared/types";
 
-
-
-
-// Mock chart data for placeholder
 const chartData = [
-  { name: 'Family Law', value: 400, color: '#3b82f6' },
-  { name: 'Criminal', value: 300, color: '#ef4444' },
-  { name: 'Corporate', value: 300, color: '#10b981' },
-  { name: 'Traffic', value: 200, color: '#f59e0b' },
+  { name: "Family Law", value: 400, color: "#3b82f6" },
+  { name: "Criminal", value: 300, color: "#ef4444" },
+  { name: "Corporate", value: 300, color: "#10b981" },
+  { name: "Traffic", value: 200, color: "#f59e0b" },
 ];
 
-export default function Dashboard() {
+function AdminAgentDashboardView({ role }: { role: "admin" | "agent" }) {
   const { data: stats, isLoading: statsLoading } = useStats();
   const { data: leads, isLoading: leadsLoading } = useLeads();
-  console.log("LEADS FROM HOOK:", leads);
-
   const { data: callLogs } = useCallLogs();
+  const isAdmin = role === "admin";
+
   const pendientes = (callLogs || []).filter(
     (c: any) => c.status === "pendiente" || c.status === "rechazada_por_abogado"
   ).length;
@@ -71,8 +71,6 @@ export default function Dashboard() {
     });
   }, [leads, search]);
 
-
-
   return (
     <div className="min-h-screen bg-background text-foreground flex">
       <Sidebar />
@@ -94,12 +92,14 @@ export default function Dashboard() {
                 className="pl-9 pr-4 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all w-64"
               />
             </div>
-
           </div>
         </header>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+        <div
+          className={`grid grid-cols-1 sm:grid-cols-2 ${
+            isAdmin ? "lg:grid-cols-4" : "lg:grid-cols-1"
+          } gap-4 md:gap-6 mb-8`}
+        >
           <StatsCard
             title="Total Leads"
             value={stats?.totalLeads ?? 0}
@@ -108,42 +108,52 @@ export default function Dashboard() {
             subtitle="+12% from last month"
             trend={{ value: 12, isPositive: true }}
           />
-          <StatsCard
-            title="Qualified"
-            value={stats?.qualifiedLeads ?? 0}
-            icon={<CheckCircle className="h-6 w-6" />}
-            isLoading={statsLoading}
-            subtitle={`${stats?.totalLeads ? Math.round(((stats.qualifiedLeads || 0) / stats.totalLeads) * 100) : 0}% of total`}
-          />
-          <StatsCard
-            title="Converted"
-            value={stats?.convertedLeads ?? 0}
-            icon={<TrendingUp className="h-6 w-6" />}
-            isLoading={statsLoading}
-            subtitle={`${stats?.qualifiedLeads ? Math.round(((stats.convertedLeads || 0) / stats.qualifiedLeads) * 100) : 0}% conversion rate`}
-          />
-          <StatsCard
-            title="Avg Response"
-            value={`${stats?.avgResponseTimeMinutes ?? 0}m`}
-            icon={<Clock className="h-6 w-6" />}
-            isLoading={statsLoading}
-            subtitle="Response time average"
-            trend={{ value: -5, isPositive: true }}
-
-          />
+          {isAdmin ? (
+            <>
+              <StatsCard
+                title="Qualified"
+                value={stats?.qualifiedLeads ?? 0}
+                icon={<CheckCircle className="h-6 w-6" />}
+                isLoading={statsLoading}
+                subtitle={`${
+                  stats?.totalLeads
+                    ? Math.round(((stats.qualifiedLeads || 0) / stats.totalLeads) * 100)
+                    : 0
+                }% of total`}
+              />
+              <StatsCard
+                title="Converted"
+                value={stats?.convertedLeads ?? 0}
+                icon={<TrendingUp className="h-6 w-6" />}
+                isLoading={statsLoading}
+                subtitle={`${
+                  stats?.qualifiedLeads
+                    ? Math.round(((stats.convertedLeads || 0) / stats.qualifiedLeads) * 100)
+                    : 0
+                }% conversion rate`}
+              />
+              <StatsCard
+                title="Avg Response"
+                value={`${stats?.avgResponseTimeMinutes ?? 0}m`}
+                icon={<Clock className="h-6 w-6" />}
+                isLoading={statsLoading}
+                subtitle="Response time average"
+                trend={{ value: -5, isPositive: true }}
+              />
+            </>
+          ) : null}
         </div>
-        {/* Call Status Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-8">
 
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-8">
           <StatsCard
             title="Llamadas Pendientes"
             value={pendientes}
             icon={<Clock className="h-6 w-6 text-yellow-500" />}
-            subtitle="Requieren revisión"
+            subtitle="Requieren revision"
           />
 
           <StatsCard
-            title="En espera de aceptación"
+            title="En espera de aceptacion"
             value={enEspera}
             icon={<Clock className="h-6 w-6 text-blue-500" />}
             subtitle="Enviadas al abogado"
@@ -155,19 +165,11 @@ export default function Dashboard() {
             icon={<CheckCircle className="h-6 w-6 text-green-500" />}
             subtitle="Ya asignadas en CRM"
           />
-
         </div>
 
-
-        {/* Middle Section: Chart + Table */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* Chart Widget */}
-          {/* Chart Widget */}
           <div className="lg:col-span-1 bg-card rounded-2xl border border-border p-4 shadow-sm inline-block">
-            <h3 className="font-semibold text-base mb-3">
-              Distribución por caso
-            </h3>
+            <h3 className="font-semibold text-base mb-3">Distribucion por caso</h3>
 
             <div className="relative h-[180px] sm:h-[200px] lg:h-[220px] mx-auto">
               <ResponsiveContainer width="100%" height="100%">
@@ -193,14 +195,12 @@ export default function Dashboard() {
                 </PieChart>
               </ResponsiveContainer>
 
-              {/* Center Text */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-xl font-bold">1.2k</span>
                 <span className="text-xs text-muted-foreground">Casos</span>
               </div>
             </div>
 
-            {/* Legend */}
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
               {chartData.map((item) => (
                 <div key={item.name} className="flex items-center gap-2">
@@ -214,14 +214,97 @@ export default function Dashboard() {
             </div>
           </div>
 
-
-          {/* Table Widget */}
           <div className="lg:col-span-2">
             <LeadsTable leads={filteredLeads} isLoading={leadsLoading} />
-
           </div>
         </div>
       </main>
     </div>
   );
+}
+
+function AttorneyDashboardView() {
+  const { data: stats, isLoading: statsLoading } = useStats();
+  const { data: callLogs, isLoading: logsLoading } = useCallLogs();
+
+  const byStatus = useMemo(() => {
+    const rows = (callLogs || []) as any[];
+    return {
+      total: rows.length,
+      pendingApproval: rows.filter(
+        (c) => String(c?.status ?? "").toLowerCase() === "pendiente_aprobacion_abogado"
+      ).length,
+      assigned: rows.filter(
+        (c) => String(c?.status ?? "").toLowerCase() === "asignada"
+      ).length,
+      rejected: rows.filter(
+        (c) => String(c?.status ?? "").toLowerCase() === "rechazada_por_abogado"
+      ).length,
+    };
+  }, [callLogs]);
+
+  return (
+    <div className="min-h-screen bg-background text-foreground flex">
+      <Sidebar />
+
+      <main className="flex-1 md:ml-64 p-4 md:p-8 animate-in">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground">Dashboard de Abogado</h1>
+          <p className="text-muted-foreground mt-1">
+            Estadisticas de tus casos y llamadas asignadas.
+          </p>
+        </header>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+          <StatsCard
+            title="Total casos"
+            value={stats?.totalLeads ?? 0}
+            icon={<Phone className="h-6 w-6" />}
+            isLoading={statsLoading}
+            subtitle="Relacionados a tu cuenta"
+          />
+          <StatsCard
+            title="Pendientes de decision"
+            value={byStatus.pendingApproval}
+            icon={<Clock className="h-6 w-6 text-yellow-500" />}
+            isLoading={logsLoading}
+            subtitle="Requieren tu validacion"
+          />
+          <StatsCard
+            title="Asignadas"
+            value={byStatus.assigned}
+            icon={<UserCheck className="h-6 w-6 text-green-500" />}
+            isLoading={logsLoading}
+            subtitle="Casos aceptados"
+          />
+          <StatsCard
+            title="Rechazadas"
+            value={byStatus.rejected}
+            icon={<XCircle className="h-6 w-6 text-rose-500" />}
+            isLoading={logsLoading}
+            subtitle="No aceptadas"
+          />
+        </div>
+
+      </main>
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  const { data: user, isLoading } = useUser();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen md:pl-64 p-6 text-sm text-muted-foreground">
+        Cargando sesion...
+      </div>
+    );
+  }
+
+  if (user?.role === "abogado") {
+    return <AttorneyDashboardView />;
+  }
+
+  return <AdminAgentDashboardView role={user?.role === "admin" ? "admin" : "agent"} />;
 }

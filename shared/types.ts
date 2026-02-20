@@ -31,6 +31,13 @@ export interface CallLog {
   summary?: string;
   transcript?: string;
   sentiment?: string;
+  city?: string;
+  stateProvince?: string;
+  location?: string;
+  email?: string;
+  address?: string;
+  caseType?: string;
+  caseNotes?: string;
   analysis?: any;
   pendingAttorneyId?: string;
   assignmentStatus?: string;

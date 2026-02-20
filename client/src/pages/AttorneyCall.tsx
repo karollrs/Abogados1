@@ -138,9 +138,9 @@ export default function AttorneyCall() {
         <div className="p-8 space-y-6">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
-              <h1 className="text-3xl font-bold tracking-tight">Llamada asignada</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Casos asignada</h1>
               <p className="text-muted-foreground">
-                Vista completa de la llamada que te fue asignada
+                Vista completa de los casos que te fueron asignados
               </p>
             </div>
 
@@ -157,14 +157,14 @@ export default function AttorneyCall() {
 
           {error && (
             <div className="text-destructive">
-              Error cargando llamada: {String((error as any)?.message ?? error)}
+              Error cargando casos: {String((error as any)?.message ?? error)}
             </div>
           )}
 
           {!isLoading && !error && !call && (
             <Card className="border-border/60 shadow-sm">
               <CardContent className="py-8 text-muted-foreground">
-                No tienes llamadas asignadas por ahora.
+                No tienes casos asignados por ahora.
               </CardContent>
             </Card>
           )}
@@ -173,7 +173,7 @@ export default function AttorneyCall() {
             <Card className="border-border/60 shadow-sm">
               <CardHeader className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <CardTitle className="text-xl">Detalle de llamada</CardTitle>
+                  <CardTitle className="text-xl">Detalle del caso</CardTitle>
                   <StatusBadge status={call.status} />
                 </div>
 
@@ -205,7 +205,7 @@ export default function AttorneyCall() {
                 {String(call.status ?? "").toLowerCase() === "pendiente_aprobacion_abogado" ? (
                   <div className="mb-4 rounded-2xl border border-orange-200 bg-orange-50/60 p-4 space-y-3">
                     <div className="text-sm font-medium text-orange-800">
-                      Esta llamada esta pendiente por tu aprobacion.
+                      Este caso esta pendiente por tu aprobacion.
                     </div>
                     <div className="text-sm text-orange-900/80">
                       Nota enviada por el equipo:{" "}
@@ -251,10 +251,10 @@ export default function AttorneyCall() {
                       Resumen
                     </TabsTrigger>
                     <TabsTrigger value="transcripcion" className="rounded-lg">
-                      TranscripciÃ³n
+                      Transcripcion
                     </TabsTrigger>
                     <TabsTrigger value="analisis" className="rounded-lg">
-                      AnÃ¡lisis
+                      Analisis
                     </TabsTrigger>
                     <TabsTrigger value="audio" className="rounded-lg" disabled={!getRecordingUrl(call)}>
                       Audio
@@ -275,7 +275,7 @@ export default function AttorneyCall() {
                   <TabsContent value="transcripcion" className="mt-4">
                     <Card className="rounded-2xl border-border/60 shadow-sm">
                       <CardHeader className="flex-row items-center justify-between">
-                        <CardTitle className="text-base">TranscripciÃ³n</CardTitle>
+                        <CardTitle className="text-base">Transcripcion</CardTitle>
                         <button
                           type="button"
                           onClick={() => {
@@ -302,7 +302,7 @@ export default function AttorneyCall() {
                   <TabsContent value="analisis" className="mt-4">
                     <Card className="rounded-2xl border-border/60 shadow-sm">
                       <CardHeader>
-                        <CardTitle className="text-base">AnÃ¡lisis</CardTitle>
+                        <CardTitle className="text-base">Analisis</CardTitle>
                       </CardHeader>
 
                       <CardContent className="space-y-4">

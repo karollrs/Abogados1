@@ -38,7 +38,7 @@ export default function Login() {
         password: submittedPassword,
       });
 
-      navigate(data?.user?.role === "abogado" ? "/attorney-call" : "/");
+      navigate("/");
     } catch (err: any) {
       setError(err?.message || "No se pudo iniciar sesion");
     } finally {
