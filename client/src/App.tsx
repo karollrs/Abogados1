@@ -10,6 +10,9 @@ import Users from "@/pages/Users";
 
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
+import Leads from "@/pages/Leads";
+
+
 
 export default function App() {
   return (
@@ -25,6 +28,9 @@ export default function App() {
         <ProtectedRoute path="/attorneys" component={Attorneys} />
 
         <ProtectedRoute path="/users" component={Users} />
+
+        <ProtectedRoute path="/leads" component={Leads} />
+
 
         {/* Fallback */}
         <Route component={() => <Redirect to="/login" />} />

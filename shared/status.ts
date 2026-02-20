@@ -1,0 +1,10 @@
+export const CRM_STATUSES = {
+  PENDIENTE: "pendiente",
+  EN_ESPERA: "en_espera_aceptacion",
+  ASIGNADA: "asignada",
+} as const;
+
+export type CRMStatus =
+  | "pendiente"
+  | "en_espera_aceptacion"
+  | "asignada";

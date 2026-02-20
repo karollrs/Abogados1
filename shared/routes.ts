@@ -1,6 +1,8 @@
+import { z } from "zod";
 
-import { z } from 'zod';
-import { insertLeadSchema, leads, insertCallLogSchema, callLogs } from './schema';
+// ============================================================
+// ERROR SCHEMAS
+// ============================================================
 
 export const errorSchemas = {
   validation: z.object({
@@ -15,39 +17,107 @@ export const errorSchemas = {
   }),
 };
 
+// ============================================================
+// LEAD SCHEMA
+// ============================================================
+
+export const leadSchema = z.object({
+  _id: z.any(),
+  id: z.number(),
+  name: z.string(),
+  phone: z.string(),
+
+  caseType: z.string().optional(),
+  urgency: z.string().optional(),
+
+  status: z.string(),
+
+  attorneyId: z.number().optional(),
+
+  retellCallId: z.string().optional(),
+  retellAgentId: z.string().optional(),
+
+  summary: z.string().optional(),
+  transcript: z.string().optional(),
+
+  lastContactedAt: z.number().optional(),
+  createdAt: z.number(),
+});
+
+// ============================================================
+// CALL LOG SCHEMA
+// ============================================================
+
+export const callLogSchema = z.object({
+  _id: z.any(),
+  id: z.number(),
+
+  leadId: z.number().optional(),
+
+  retellCallId: z.string(),
+
+  agentId: z.string().optional(),
+  phoneNumber: z.string().optional(),
+
+  status: z.string(),
+
+  direction: z.string().optional(),
+  duration: z.number().optional(),
+
+  recordingUrl: z.string().optional(),
+
+  summary: z.string().optional(),
+  transcript: z.string().optional(),
+  sentiment: z.string().optional(),
+
+  analysis: z.any().optional(),
+
+  createdAt: z.number(),
+});
+
+// ============================================================
+// API CONTRACT
+// ============================================================
+
 export const api = {
   leads: {
     list: {
-      method: 'GET' as const,
-      path: '/api/leads' as const,
-      input: z.object({
-        search: z.string().optional(),
-        status: z.string().optional(),
-      }).optional(),
+      method: "GET" as const,
+      path: "/api/leads" as const,
+      input: z
+        .object({
+          search: z.string().optional(),
+          status: z.string().optional(),
+        })
+        .optional(),
       responses: {
-        200: z.array(z.custom<typeof leads.$inferSelect>()),
+        200: z.array(leadSchema),
       },
     },
+
     get: {
-      method: 'GET' as const,
-      path: '/api/leads/:id' as const,
+      method: "GET" as const,
+      path: "/api/leads/:id" as const,
       responses: {
-        200: z.custom<typeof leads.$inferSelect>(),
+        200: leadSchema,
         404: errorSchemas.notFound,
       },
     },
+
     update: {
-      method: 'PATCH' as const,
-      path: '/api/leads/:id' as const,
-      input: insertLeadSchema.partial(),
+      method: "PATCH" as const,
+      path: "/api/leads/:id" as const,
+      input: leadSchema.partial(),
       responses: {
-        200: z.custom<typeof leads.$inferSelect>(),
+        200: leadSchema,
         404: errorSchemas.notFound,
       },
     },
+
+    // 🔥 ESTA ERA LA QUE FALTABA
     stats: {
-      method: 'GET' as const,
-      path: '/api/stats' as const,
+      method: "GET" as const,
+      path: "/api/stats" as const,
       responses: {
         200: z.object({
           totalLeads: z.number(),
@@ -56,22 +126,52 @@ export const api = {
           avgResponseTimeMinutes: z.number(),
         }),
       },
-    }
+    },
   },
+
+  callLogs: {
+    list: {
+      method: "GET" as const,
+      path: "/api/call-logs" as const,
+      responses: {
+        200: z.array(callLogSchema),
+      },
+    },
+
+    get: {
+      method: "GET" as const,
+      path: "/api/call-logs/:id" as const,
+      responses: {
+        200: callLogSchema,
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+
   webhooks: {
     retell: {
-      method: 'POST' as const,
-      path: '/api/retell-webhook' as const,
-      input: z.any(), // Flexible input as webhooks can vary, validation inside handler
+      method: "POST" as const,
+      path: "/api/retell-webhook" as const,
+      input: z.any(),
       responses: {
-        200: z.object({ success: z.boolean() }),
+        200: z.object({
+          success: z.boolean(),
+        }),
       },
-    }
-  }
+    },
+  },
 };
 
-export function buildUrl(path: string, params?: Record<string, string | number>): string {
+// ============================================================
+// URL BUILDER
+// ============================================================
+
+export function buildUrl(
+  path: string,
+  params?: Record<string, string | number>
+): string {
   let url = path;
+
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (url.includes(`:${key}`)) {
@@ -79,5 +179,6 @@ export function buildUrl(path: string, params?: Record<string, string | number>)
       }
     });
   }
+
   return url;
 }

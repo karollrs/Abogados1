@@ -1,16 +1,21 @@
 import { useMemo, useState, useEffect } from "react";
 import { MoreHorizontal, Phone, AlertCircle } from "lucide-react";
 import { type Lead } from "@shared/schema";
-import { useUpdateLead } from "@/hooks/use-leads";
+
 import { useLocation } from "wouter";
 
 const statusStyles = {
-  New: "bg-blue-50 text-blue-700 ring-blue-600/20",
-  Contacted: "bg-yellow-50 text-yellow-700 ring-yellow-600/20",
-  Qualified: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
-  Converted: "bg-purple-50 text-purple-700 ring-purple-600/20",
-  Disqualified: "bg-gray-50 text-gray-700 ring-gray-600/20",
+  pendiente: "bg-yellow-100 text-yellow-800 ring-yellow-600/20",
+  en_espera_aceptacion: "bg-blue-100 text-blue-800 ring-blue-600/20",
+  asignada: "bg-green-100 text-green-800 ring-green-600/20",
 };
+
+const statusLabels = {
+  pendiente: "Pendiente",
+  en_espera_aceptacion: "En revisión",
+  asignada: "Asignada",
+};
+
 
 const urgencyStyles = {
   Low: "text-muted-foreground",
@@ -25,7 +30,7 @@ interface LeadsTableProps {
 }
 
 export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
-  const updateLead = useUpdateLead();
+
   const [, navigate] = useLocation();
 
   const ITEMS_PER_PAGE = 7;
@@ -56,11 +61,7 @@ export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
     );
   }
 
-  const handleStatusChange = (id: number, currentStatus: string) => {
-    const statuses = ["New", "Contacted", "Qualified", "Converted", "Disqualified"];
-    const nextIndex = (statuses.indexOf(currentStatus) + 1) % statuses.length;
-    updateLead.mutate({ id, status: statuses[nextIndex] });
-  };
+
 
   return (
     <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
@@ -114,10 +115,9 @@ export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
 
                   <td className="px-6 py-4">
                     <div
-                      className={`flex items-center gap-1.5 text-xs ${
-                        urgencyStyles[lead.urgency as keyof typeof urgencyStyles] ||
+                      className={`flex items-center gap-1.5 text-xs ${urgencyStyles[lead.urgency as keyof typeof urgencyStyles] ||
                         urgencyStyles.Low
-                      }`}
+                        }`}
                     >
                       <AlertCircle className="h-3.5 w-3.5" />
                       {lead.urgency}
@@ -125,17 +125,16 @@ export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
                   </td>
 
                   <td className="px-6 py-4">
-                    <button
-                      type="button"
-                      onClick={() => handleStatusChange(lead.id, lead.status)}
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset transition-all hover:opacity-80 ${
-                        statusStyles[lead.status as keyof typeof statusStyles] ||
-                        statusStyles.New
-                      }`}
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${statusStyles[lead.status as keyof typeof statusStyles] ||
+                        "bg-gray-100 text-gray-600"
+                        }`}
                     >
-                      {lead.status}
-                    </button>
+                      {statusLabels[lead.status as keyof typeof statusLabels] ?? lead.status}
+                    </span>
                   </td>
+
+
 
                   <td className="px-6 py-4 text-right">
                     <button
@@ -143,7 +142,10 @@ export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
                       onClick={(e) => {
                         e.stopPropagation();
                         const phone = lead.phone || "";
-                        navigate(`/calls?phone=${encodeURIComponent(phone)}`);
+                        navigate(
+                          `/calls?phone=${encodeURIComponent(phone)}&from=${encodeURIComponent("/")}`
+                        );
+
                       }}
                       className="text-muted-foreground hover:text-primary transition-colors p-2 rounded-lg hover:bg-primary/5"
                       title="Ver llamadas"
@@ -160,60 +162,60 @@ export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
 
       {/* Pagination (FUERA de la tabla) */}
       {/* Pagination (minimal + bonita) */}
-{leads.length > 0 && totalPages > 1 && (
-  <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border bg-muted/20">
-    <div className="text-xs text-muted-foreground">
-      Mostrando{" "}
-      <span className="font-medium text-foreground">
-        {(currentPage - 1) * ITEMS_PER_PAGE + 1}
-      </span>
-      {"–"}
-      <span className="font-medium text-foreground">
-        {Math.min(currentPage * ITEMS_PER_PAGE, leads.length)}
-      </span>{" "}
-      de{" "}
-      <span className="font-medium text-foreground">{leads.length}</span>
-    </div>
+      {leads.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border bg-muted/20">
+          <div className="text-xs text-muted-foreground">
+            Mostrando{" "}
+            <span className="font-medium text-foreground">
+              {(currentPage - 1) * ITEMS_PER_PAGE + 1}
+            </span>
+            {"–"}
+            <span className="font-medium text-foreground">
+              {Math.min(currentPage * ITEMS_PER_PAGE, leads.length)}
+            </span>{" "}
+            de{" "}
+            <span className="font-medium text-foreground">{leads.length}</span>
+          </div>
 
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-        disabled={currentPage === 1}
-        className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted transition disabled:opacity-40 disabled:hover:bg-card"
-        aria-label="Página anterior"
-        title="Anterior"
-      >
-        {"<"}
-      </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted transition disabled:opacity-40 disabled:hover:bg-card"
+              aria-label="Página anterior"
+              title="Anterior"
+            >
+              {"<"}
+            </button>
 
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground hidden sm:inline">
-          Página
-        </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Página
+              </span>
 
-        <span className="min-w-[44px] text-center px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/10 text-primary font-semibold text-sm">
-          {currentPage}
-        </span>
+              <span className="min-w-[44px] text-center px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/10 text-primary font-semibold text-sm">
+                {currentPage}
+              </span>
 
-        <span className="text-xs text-muted-foreground">
-          de <span className="font-medium text-foreground">{totalPages}</span>
-        </span>
-      </div>
+              <span className="text-xs text-muted-foreground">
+                de <span className="font-medium text-foreground">{totalPages}</span>
+              </span>
+            </div>
 
-      <button
-        type="button"
-        onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-        disabled={currentPage === totalPages}
-        className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted transition disabled:opacity-40 disabled:hover:bg-card"
-        aria-label="Página siguiente"
-        title="Siguiente"
-      >
-        {">"}
-      </button>
-    </div>
-  </div>
-)}
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted transition disabled:opacity-40 disabled:hover:bg-card"
+              aria-label="Página siguiente"
+              title="Siguiente"
+            >
+              {">"}
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

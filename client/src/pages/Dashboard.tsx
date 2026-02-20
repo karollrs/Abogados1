@@ -11,6 +11,8 @@ import { LeadsTable } from "@/components/LeadsTable";
 import { useLeads, useStats } from "@/hooks/use-leads";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useMemo, useState } from "react";
+import { useCallLogs } from "@/hooks/use-call-logs";
+
 
 
 // Mock chart data for placeholder
@@ -24,31 +26,45 @@ const chartData = [
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useStats();
   const { data: leads, isLoading: leadsLoading } = useLeads();
+  const { data: callLogs } = useCallLogs();
+  const pendientes = (callLogs || []).filter(
+    (c: any) => c.status === "pendiente"
+  ).length;
+
+  const enEspera = (callLogs || []).filter(
+    (c: any) => c.status === "en_espera_aceptacion"
+  ).length;
+
+  const asignadas = (callLogs || []).filter(
+    (c: any) => c.status === "asignada"
+  ).length;
+
   const [search, setSearch] = useState("");
   const filteredLeads = useMemo(() => {
-  const q = search.trim().toLowerCase();
-  if (!q) return leads || [];
+    const q = search.trim().toLowerCase();
+    if (!q) return leads || [];
 
-  return (leads || []).filter((l: any) => {
-    const haystack = [
-      l.name,
-      l.fullName,
-      l.leadName,
-      l.phone,
-      l.phoneNumber,
-      l.email,
-      l.caseType,
-      l.urgency,
-      l.status,
-      l.notes,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
+    return (leads || []).filter((l: any) => {
+      const haystack = [
+        l.name,
+        l.fullName,
+        l.leadName,
+        l.phone,
+        l.phoneNumber,
+        l.email,
+        l.caseType,
+        l.urgency,
+        l.status,
+        l.notes,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
 
-    return haystack.includes(q);
-  });
-}, [leads, search]);
+      return haystack.includes(q);
+    });
+  }, [leads, search]);
+
 
 
   return (
@@ -107,8 +123,35 @@ export default function Dashboard() {
             isLoading={statsLoading}
             subtitle="Response time average"
             trend={{ value: -5, isPositive: true }}
+
           />
         </div>
+        {/* Call Status Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-8">
+
+          <StatsCard
+            title="Llamadas Pendientes"
+            value={pendientes}
+            icon={<Clock className="h-6 w-6 text-yellow-500" />}
+            subtitle="Requieren revisión"
+          />
+
+          <StatsCard
+            title="En espera de aceptación"
+            value={enEspera}
+            icon={<Clock className="h-6 w-6 text-blue-500" />}
+            subtitle="Enviadas al abogado"
+          />
+
+          <StatsCard
+            title="Asignadas"
+            value={asignadas}
+            icon={<CheckCircle className="h-6 w-6 text-green-500" />}
+            subtitle="Ya asignadas en CRM"
+          />
+
+        </div>
+
 
         {/* Middle Section: Chart + Table */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -169,6 +212,7 @@ export default function Dashboard() {
           {/* Table Widget */}
           <div className="lg:col-span-2">
             <LeadsTable leads={filteredLeads} isLoading={leadsLoading} />
+
           </div>
         </div>
       </main>

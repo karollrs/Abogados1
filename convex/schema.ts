@@ -60,7 +60,7 @@ attorneys: defineTable({
     retellCallId: v.string(),
     agentId: v.optional(v.string()),
     phoneNumber: v.optional(v.string()),
-    status: v.optional(v.string()),
+    status: v.string(),
     direction: v.optional(v.string()),
     duration: v.optional(v.number()),
     recordingUrl: v.optional(v.string()),

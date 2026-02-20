@@ -14,6 +14,8 @@ const baseNavigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Call Logs", href: "/calls", icon: Phone },
   { name: "Attorneys", href: "/attorneys", icon: Gavel },
+  { name: "Leads", href: "/leads", icon: UsersIcon },
+
   
 ];
 

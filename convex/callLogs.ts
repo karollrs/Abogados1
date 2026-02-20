@@ -34,6 +34,40 @@ export const listWithLead = query({
   },
 });
 
+export const updateCallStatus = mutation({
+  args: {
+    callId: v.id("callLogs"),
+    status: v.union(
+      v.literal("pendiente"),
+      v.literal("en_espera_aceptacion"),
+      v.literal("asignada")
+    ),
+  },
+  handler: async (ctx, { callId, status }) => {
+    // 1. Actualizar callLog
+    await ctx.db.patch(callId, { status });
+
+    // 2. Buscar callLog actualizado
+    const call = await ctx.db.get(callId);
+    if (!call?.leadId) return;
+
+    // 3. Buscar lead por legacy id
+    const lead = await ctx.db
+      .query("leads")
+      .filter((q) => q.eq(q.field("id"), call.leadId))
+      .unique();
+
+    if (!lead) return;
+
+    // 4. Sincronizar estado del lead
+    await ctx.db.patch(lead._id, {
+      status,
+    });
+  },
+});
+
+
+
 export const getByRetellCallId = query({
   args: { retellCallId: v.string() },
   handler: async (ctx, { retellCallId }) => {
@@ -50,7 +84,6 @@ export const create = mutation({
     retellCallId: v.string(),
     agentId: v.optional(v.string()),
     phoneNumber: v.optional(v.string()),
-    status: v.optional(v.string()),
     direction: v.optional(v.string()),
     duration: v.optional(v.number()),
     recordingUrl: v.optional(v.string()),
@@ -59,6 +92,9 @@ export const create = mutation({
     sentiment: v.optional(v.string()),
     analysis: v.optional(v.any()),
   },
+
+
+
   handler: async (ctx, a) => {
     const newId = await nextId(ctx, "callLogs");
     const now = Date.now();
@@ -69,7 +105,7 @@ export const create = mutation({
       retellCallId: a.retellCallId,
       agentId: a.agentId,
       phoneNumber: a.phoneNumber,
-      status: a.status,
+      status: "pendiente",
       direction: a.direction ?? "inbound",
       duration: a.duration,
       recordingUrl: a.recordingUrl,
@@ -79,6 +115,20 @@ export const create = mutation({
       analysis: a.analysis,
       createdAt: now,
     });
+    // 🔁 Sincronizar lead a pendiente
+    if (a.leadId != null) {
+      const lead = await ctx.db
+        .query("leads")
+        .filter((q) => q.eq(q.field("id"), a.leadId))
+        .unique();
+
+      if (lead) {
+        await ctx.db.patch(lead._id, {
+          status: "pendiente",
+        });
+      }
+    }
+
 
     // Buscar por legacy id (id:number) sin índice by_id
     return await ctx.db
@@ -104,12 +154,35 @@ export const upsertByRetellCallId = mutation({
       const now = Date.now();
 
       // OJO: updates podría traer campos raros. Si quieres lo sanitizamos como en leads.
+      const summaryFromAnalysis =
+        updates?.analysis?.call_summary ??
+        updates?.analysis?.post_call_analysis?.call_summary ??
+        null;
+
       await ctx.db.insert("callLogs", {
         id: newId,
         retellCallId,
+        status: "pendiente",
         createdAt: now,
         ...updates,
+        summary: updates.summary ?? summaryFromAnalysis ?? null,
       });
+
+
+      if (updates?.leadId != null) {
+        const lead = await ctx.db
+          .query("leads")
+          .filter((q) => q.eq(q.field("id"), updates.leadId))
+          .unique();
+
+        if (lead) {
+          await ctx.db.patch(lead._id, {
+            status: "pendiente",
+          });
+        }
+      }
+
+
 
       return await ctx.db
         .query("callLogs")
@@ -117,7 +190,34 @@ export const upsertByRetellCallId = mutation({
         .unique();
     }
 
-    await ctx.db.patch(existing._id, updates);
-    return await ctx.db.get(existing._id);
+    const summaryFromAnalysis =
+      updates?.analysis?.call_summary ??
+      updates?.analysis?.post_call_analysis?.call_summary ??
+      null;
+
+    await ctx.db.patch(existing._id, {
+      ...updates,
+      summary: updates.summary ?? summaryFromAnalysis ?? existing.summary,
+    });
+
+
+    const updated = await ctx.db.get(existing._id);
+
+    // 🔁 Sincronizar lead si cambió el status
+    if (updated?.leadId && updates?.status) {
+      const lead = await ctx.db
+        .query("leads")
+        .filter((q) => q.eq(q.field("id"), updated.leadId))
+        .unique();
+
+      if (lead) {
+        await ctx.db.patch(lead._id, {
+          status: updates.status,
+        });
+      }
+    }
+
+    return updated;
+
   },
 });

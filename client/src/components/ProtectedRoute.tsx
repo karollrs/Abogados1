@@ -1,4 +1,4 @@
-import { Route, useLocation } from "wouter";
+import { Route, Redirect } from "wouter";
 import { useUser } from "@/hooks/use-auth";
 
 export function ProtectedRoute({
@@ -9,12 +9,10 @@ export function ProtectedRoute({
   component: React.ComponentType<any>;
 }) {
   const { data: user, isLoading } = useUser();
-  const [, navigate] = useLocation();
 
   return (
-    <Route
-      path={path}
-      component={() => {
+    <Route path={path}>
+      {() => {
         if (isLoading) {
           return (
             <div className="min-h-screen md:pl-64 p-6 text-sm text-muted-foreground">
@@ -24,12 +22,11 @@ export function ProtectedRoute({
         }
 
         if (!user) {
-          navigate("/login");
-          return null;
+          return <Redirect to="/login" />;
         }
 
         return <Component />;
       }}
-    />
+    </Route>
   );
 }
