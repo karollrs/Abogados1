@@ -14,6 +14,48 @@ import type {
 import type { Id } from "../convex/_generated/dataModel";
 
 
+
+function toOptionalString(value: any): string | undefined {
+  if (value == null) return undefined;
+  const text = String(value).trim();
+  return text.length ? text : undefined;
+}
+
+function toOptionalNumber(value: any): number | undefined {
+  if (value == null || value === "") return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function toTimestamp(value: any): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") {
+    const direct = Number(value);
+    if (Number.isFinite(direct)) return direct;
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return Date.now();
+}
+
+function normalizeLeadPayload(lead: any): any {
+  if (!lead) return lead;
+  return {
+    ...lead,
+    caseType: toOptionalString(lead.caseType),
+    urgency: toOptionalString(lead.urgency),
+    status: toOptionalString(lead.status) ?? "New",
+    attorneyId: toOptionalNumber(lead.attorneyId),
+    retellCallId: toOptionalString(lead.retellCallId),
+    retellAgentId: toOptionalString(lead.retellAgentId),
+    summary: toOptionalString(lead.summary),
+    transcript: toOptionalString(lead.transcript),
+    lastContactedAt: toOptionalNumber(lead.lastContactedAt),
+    createdAt: toTimestamp(lead.createdAt),
+  };
+}
+
 // Normalizador fuerte para specialties
 function normalizeSpecialties(v: any): string[] {
   if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
@@ -77,21 +119,21 @@ export class ConvexStorage implements IStorage {
       search: search || undefined,
       status: status && status !== "All" ? status : undefined,
     });
-    return rows as any;
+    return rows.map((l) => normalizeLeadPayload(l)) as any;
   }
 
   async getLead(id: number): Promise<Lead | undefined> {
     const { client, api } = convexClient();
     const l: any = await client.query(api.leads.get, { id });
     if (!l) return undefined;
-    return l as any;
+    return normalizeLeadPayload(l) as any;
   }
 
   async getLeadByRetellCallId(retellCallId: string): Promise<Lead | undefined> {
     const { client, api } = convexClient();
     const l: any = await client.query(api.leads.getByRetellCallId, { retellCallId });
     if (!l) return undefined;
-    return l as any;
+    return normalizeLeadPayload(l) as any;
   }
 
   async createLead(lead: InsertLead): Promise<Lead> {
@@ -108,7 +150,7 @@ export class ConvexStorage implements IStorage {
       summary: (lead as any).summary ?? undefined,
       transcript: (lead as any).transcript ?? undefined,
     });
-    return created as any;
+    return normalizeLeadPayload(created) as any;
   }
 
   async updateLead(id: number, updates: UpdateLeadRequest): Promise<Lead> {
@@ -117,13 +159,13 @@ export class ConvexStorage implements IStorage {
     // convert Date -> number
     if ((mapped as any).lastContactedAt instanceof Date) mapped.lastContactedAt = (mapped as any).lastContactedAt.getTime();
     const updated: any = await client.mutation(api.leads.update, { id, updates: mapped });
-    return updated as any;
+    return normalizeLeadPayload(updated) as any;
   }
 
   async assignAttorneyToLead(leadId: number, attorneyId: string): Promise<Lead> {
     const { client, api } = convexClient();
     const updated: any = await client.mutation(api.leads.assignAttorney, { id: leadId, attorneyId });
-    return updated as any;
+    return normalizeLeadPayload(updated) as any;
   }
 
   // -------------------------
@@ -232,7 +274,7 @@ export class ConvexStorage implements IStorage {
   async listUsers(): Promise<User[]> {
     const { client, api } = convexClient();
     const rows: any[] = await client.query(api.users.list, {});
-    return rows as any;
+    return rows.map((l) => normalizeLeadPayload(l)) as any;
   }
 
   async createUser(user: { email: string; name: string; role: string; passwordHash: string; id?: string }): Promise<User> {
@@ -245,13 +287,13 @@ export class ConvexStorage implements IStorage {
       role: user.role,
       passwordHash: user.passwordHash,
     });
-    return created as any;
+    return normalizeLeadPayload(created) as any;
   }
 
   async setUserActive(id: string, isActive: boolean): Promise<User> {
     const { client, api } = convexClient();
     const updated: any = await client.mutation(api.users.setActive, { id, isActive: isActive ? 1 : 0 });
-    return updated as any;
+    return normalizeLeadPayload(updated) as any;
   }
 }
 

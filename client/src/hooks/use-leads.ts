@@ -3,6 +3,48 @@ import { api, buildUrl } from "@shared/routes";
 
 type RetellWebhookPayload = Record<string, unknown>;
 
+function toOptionalString(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  const text = String(value).trim();
+  return text.length ? text : undefined;
+}
+
+function toOptionalNumber(value: unknown): number | undefined {
+  if (value == null || value === "") return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function toTimestamp(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") {
+    const direct = Number(value);
+    if (Number.isFinite(direct)) return direct;
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return Date.now();
+}
+
+function normalizeLead(input: any) {
+  return {
+    ...input,
+    name: toOptionalString(input?.name) ?? "Sin nombre",
+    phone: toOptionalString(input?.phone) ?? "",
+    caseType: toOptionalString(input?.caseType),
+    urgency: toOptionalString(input?.urgency),
+    status: toOptionalString(input?.status) ?? "New",
+    attorneyId: toOptionalNumber(input?.attorneyId),
+    retellCallId: toOptionalString(input?.retellCallId),
+    retellAgentId: toOptionalString(input?.retellAgentId),
+    summary: toOptionalString(input?.summary),
+    transcript: toOptionalString(input?.transcript),
+    lastContactedAt: toOptionalNumber(input?.lastContactedAt),
+    createdAt: toTimestamp(input?.createdAt),
+  };
+}
+
 
 export function useLeads(search?: string, status?: string) {
   return useQuery({
@@ -17,7 +59,15 @@ export function useLeads(search?: string, status?: string) {
       
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch leads");
-      return api.leads.list.responses[200].parse(await res.json());
+
+      const raw = await res.json();
+      const normalized = Array.isArray(raw) ? raw.map((lead) => normalizeLead(lead)) : [];
+
+      const parsed = api.leads.list.responses[200].safeParse(normalized);
+      if (parsed.success) return parsed.data;
+
+      console.warn("Leads payload had unexpected values, returning sanitized rows", parsed.error);
+      return normalized;
     },
   });
 }
