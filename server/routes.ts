@@ -74,7 +74,6 @@ function hasCallData(payload: any): boolean {
     payload.call ||
       payload.call_id ||
       payload.callId ||
-      payload.id ||
       payload.transcript ||
       payload.recording_url ||
       payload.recordingUrl ||
@@ -427,10 +426,8 @@ export async function registerRoutes(
       const callId = pickFirstString(
         call.call_id,
         call.callId,
-        call.id,
         envelope.call_id,
         envelope.callId,
-        envelope.id,
         payload.call_id,
         payload.callId
       );
@@ -589,9 +586,7 @@ export async function registerRoutes(
         analysis,
       };
 
-      const existingLog = await storage.getCallLogByRetellCallId(callId);
-      if (existingLog) await storage.updateCallLogByRetellCallId(callId, logUpdates);
-      else await storage.createCallLog(logUpdates);
+      await storage.updateCallLogByRetellCallId(callId, logUpdates);
 
       return res.json({ success: true });
     } catch (err) {
