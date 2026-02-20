@@ -370,7 +370,7 @@ export async function registerRoutes(
   // ---------------------------------------------------------------------------
   // RETELL WEBHOOK
   // ---------------------------------------------------------------------------
-  app.post(api.webhooks.retell.path, async (req, res) => {
+  const retellWebhookHandler = async (req: any, res: any) => {
     const payload = req.body || {};
     const rawEvent = payload.event || payload.type;
     const event = normalizeEvent(rawEvent);
@@ -488,7 +488,12 @@ export async function registerRoutes(
       console.error("Webhook Error:", err);
       return res.status(200).json({ success: false });
     }
-  });
+  };
+
+  // Ruta principal (actual)
+  app.post(api.webhooks.retell.path, retellWebhookHandler);
+  // Ruta legacy documentada en README y usada en varios paneles de Retell
+  app.post("/retell-webhook", retellWebhookHandler);
 
   return httpServer;
 }
