@@ -31,6 +31,24 @@ function mapStatusFromAnalysis(
 function normalizeEvent(event: any): string {
   return String(event || "").trim().toLowerCase();
 }
+
+function pickFirstObject<T = Record<string, any>>(...values: any[]): T | undefined {
+  for (const v of values) {
+    if (v && typeof v === "object" && !Array.isArray(v)) return v as T;
+  }
+  return undefined;
+}
+
+function parseDurationSeconds(...values: any[]): number {
+  for (const v of values) {
+    if (typeof v !== "number" || Number.isNaN(v) || v <= 0) continue;
+    // Retell usualmente manda duration_ms. Si parece ms, convertimos a segundos.
+    if (v > 1000) return Math.round(v / 1000);
+    return Math.round(v);
+  }
+  return 0;
+}
+
 function isAnalyzedEvent(e: string) {
   return e === "call_analyzed" || e === "call.analyzed";
 }
@@ -372,13 +390,36 @@ export async function registerRoutes(
   // ---------------------------------------------------------------------------
   const retellWebhookHandler = async (req: any, res: any) => {
     const payload = req.body || {};
-    const rawEvent = payload.event || payload.type;
+    const envelope = pickFirstObject(payload.data, payload.body, payload) || payload;
+    const call = pickFirstObject(envelope.call, payload.call) || {};
+    const rawEvent =
+      payload.event ||
+      payload.type ||
+      envelope.event ||
+      envelope.type ||
+      payload.event_type ||
+      envelope.event_type;
     const event = normalizeEvent(rawEvent);
 
     try {
-      const call = payload.call || {};
-      const callId = pickFirstString(call.call_id, payload.call_id, payload.callId);
-      const agentId = pickFirstString(call.agent_id, payload.agent_id, payload.agentId);
+      const callId = pickFirstString(
+        call.call_id,
+        call.callId,
+        call.id,
+        envelope.call_id,
+        envelope.callId,
+        envelope.id,
+        payload.call_id,
+        payload.callId
+      );
+      const agentId = pickFirstString(
+        call.agent_id,
+        call.agentId,
+        envelope.agent_id,
+        envelope.agentId,
+        payload.agent_id,
+        payload.agentId
+      );
 
       if (!callId) return res.json({ success: true });
 
@@ -397,11 +438,22 @@ export async function registerRoutes(
           call.from
         ) || (callType === "web_call" ? "Web Call" : "Unknown");
 
-      const analysis = call.call_analysis || payload.call_analysis || {};
+      const analysis =
+        pickFirstObject(
+          call.call_analysis,
+          call.analysis,
+          envelope.call_analysis,
+          envelope.analysis,
+          payload.call_analysis,
+          payload.analysis
+        ) || {};
       const transcriptSingle =
         pickFirstString(
           call.transcript,
+          call.transcript_text,
+          call.transcription,
           payload.transcript,
+          envelope.transcript,
           call.transcript_text,
           payload.transcript_text,
           call.transcription,
@@ -416,6 +468,7 @@ export async function registerRoutes(
       const transcriptTurns =
         (Array.isArray(call.transcript) ? call.transcript : null) ||
         (Array.isArray(call.transcript_turns) ? call.transcript_turns : null) ||
+        (Array.isArray(envelope.transcript_turns) ? envelope.transcript_turns : null) ||
         (Array.isArray(payload.transcript) ? payload.transcript : null);
 
       if (!transcriptText && transcriptTurns) {
@@ -432,14 +485,39 @@ export async function registerRoutes(
         (transcriptText ? "Llamada recibida por Retell" : null);
 
       const transcriptFinal = transcriptText || analysis?.transcript || null;
-      const recordingUrl = pickFirstString(call.recording_url, payload.recording_url) || null;
+      const recordingUrl =
+        pickFirstString(
+          call.recording_url,
+          call.recordingUrl,
+          envelope.recording_url,
+          envelope.recordingUrl,
+          payload.recording_url,
+          payload.recordingUrl,
+          call.recording?.url,
+          envelope.recording?.url,
+          payload.recording?.url
+        ) || null;
 
-      const durationMs = call.duration_ms ?? payload.duration_ms ?? 0;
-      const durationSec = typeof durationMs === "number" ? Math.round(durationMs / 1000) : 0;
+      const durationSec = parseDurationSeconds(
+        call.duration_ms,
+        envelope.duration_ms,
+        payload.duration_ms,
+        call.duration,
+        envelope.duration,
+        payload.duration
+      );
 
-      const callStatus = pickFirstString(call.call_status, payload.call_status) || "ended";
+      const callStatus =
+        pickFirstString(
+          call.call_status,
+          call.status,
+          envelope.call_status,
+          envelope.status,
+          payload.call_status,
+          payload.status
+        ) || "ended";
 
-      const cad = analysis.custom_analysis_data || {};
+      const cad = pickFirstObject(analysis.custom_analysis_data, analysis.customAnalysisData) || {};
       const leadName = safeString(cad.name, "AI Lead");
       const caseType = safeString(cad.case_type, "General");
       const urgency = safeString(cad.urgency, "Medium");
@@ -486,6 +564,7 @@ export async function registerRoutes(
       return res.json({ success: true });
     } catch (err) {
       console.error("Webhook Error:", err);
+      console.error("Webhook Payload:", JSON.stringify(req.body || {}));
       return res.status(200).json({ success: false });
     }
   };
