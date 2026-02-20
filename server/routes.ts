@@ -50,14 +50,36 @@ function parseDurationSeconds(...values: any[]): number {
 }
 
 function isAnalyzedEvent(e: string) {
-  return e === "call_analyzed" || e === "call.analyzed";
+  return (
+    e === "call_analyzed" ||
+    e === "call.analyzed" ||
+    e === "call_analysis_ready" ||
+    e === "call.analysis_ready"
+  );
 }
 function isFinalEvent(e: string) {
   return (
     e === "call_completed" ||
     e === "call.completed" ||
     e === "call_ended" ||
-    e === "call.ended"
+    e === "call.ended" ||
+    e === "call_finished" ||
+    e === "call.finished"
+  );
+}
+
+function hasCallData(payload: any): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  return Boolean(
+    payload.call ||
+      payload.call_id ||
+      payload.callId ||
+      payload.id ||
+      payload.transcript ||
+      payload.recording_url ||
+      payload.recordingUrl ||
+      payload.call_analysis ||
+      payload.analysis
   );
 }
 
@@ -425,7 +447,11 @@ export async function registerRoutes(
 
       const analyzed = isAnalyzedEvent(event);
       const final = isFinalEvent(event);
-      if (!analyzed && !final) return res.json({ success: true });
+      // Algunos tenants de Retell mandan eventos con nombres distintos; si ya hay datos de llamada,
+      // no descartamos el webhook para evitar perder registros tras reset de base.
+      if (!analyzed && !final && !hasCallData(envelope) && !hasCallData(payload)) {
+        return res.json({ success: true });
+      }
 
       const callType = safeString(call.call_type, "");
       const fromNumber =
@@ -481,8 +507,14 @@ export async function registerRoutes(
       }
 
       const summary =
-        pickFirstString(analysis.call_summary, payload.call_summary) ||
-        (transcriptText ? "Llamada recibida por Retell" : null);
+        pickFirstString(
+          analysis.call_summary,
+          analysis.summary,
+          envelope.call_summary,
+          envelope.summary,
+          payload.call_summary,
+          payload.summary
+        ) || (transcriptText ? "Llamada recibida por Retell" : null);
 
       const transcriptFinal = transcriptText || analysis?.transcript || null;
       const recordingUrl =
