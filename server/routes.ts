@@ -142,6 +142,11 @@ export async function registerRoutes(
     res.json(leads);
   });
 
+  app.get(api.leads.stats.path, async (_req, res) => {
+    const stats = await storage.getDashboardStats();
+    res.json(stats);
+  });
+
   /* ================= RETELL WEBHOOK ================= */
 
   app.post(api.webhooks.retell.path, async (req, res) => {
