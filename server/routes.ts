@@ -31,54 +31,15 @@ function mapStatusFromAnalysis(
 function normalizeEvent(event: any): string {
   return String(event || "").trim().toLowerCase();
 }
-
-function pickFirstObject<T = Record<string, any>>(...values: any[]): T | undefined {
-  for (const v of values) {
-    if (v && typeof v === "object" && !Array.isArray(v)) return v as T;
-  }
-  return undefined;
-}
-
-function parseDurationSeconds(...values: any[]): number {
-  for (const v of values) {
-    if (typeof v !== "number" || Number.isNaN(v) || v <= 0) continue;
-    // Retell usualmente manda duration_ms. Si parece ms, convertimos a segundos.
-    if (v > 1000) return Math.round(v / 1000);
-    return Math.round(v);
-  }
-  return 0;
-}
-
 function isAnalyzedEvent(e: string) {
-  return (
-    e === "call_analyzed" ||
-    e === "call.analyzed" ||
-    e === "call_analysis_ready" ||
-    e === "call.analysis_ready"
-  );
+  return e === "call_analyzed" || e === "call.analyzed";
 }
 function isFinalEvent(e: string) {
   return (
     e === "call_completed" ||
     e === "call.completed" ||
     e === "call_ended" ||
-    e === "call.ended" ||
-    e === "call_finished" ||
-    e === "call.finished"
-  );
-}
-
-function hasCallData(payload: any): boolean {
-  if (!payload || typeof payload !== "object") return false;
-  return Boolean(
-    payload.call ||
-      payload.call_id ||
-      payload.callId ||
-      payload.transcript ||
-      payload.recording_url ||
-      payload.recordingUrl ||
-      payload.call_analysis ||
-      payload.analysis
+    e === "call.ended"
   );
 }
 
@@ -409,44 +370,22 @@ export async function registerRoutes(
   // ---------------------------------------------------------------------------
   // RETELL WEBHOOK
   // ---------------------------------------------------------------------------
-  const retellWebhookHandler = async (req: any, res: any) => {
+  app.post(api.webhooks.retell.path, async (req, res) => {
     const payload = req.body || {};
-    const envelope = pickFirstObject(payload.data, payload.body, payload) || payload;
-    const call = pickFirstObject(envelope.call, payload.call) || {};
-    const rawEvent =
-      payload.event ||
-      payload.type ||
-      envelope.event ||
-      envelope.type ||
-      payload.event_type ||
-      envelope.event_type;
+    const rawEvent = payload.event || payload.type;
     const event = normalizeEvent(rawEvent);
 
     try {
-      const callId = pickFirstString(
-        call.call_id,
-        call.callId,
-        envelope.call_id,
-        envelope.callId,
-        payload.call_id,
-        payload.callId
-      );
-      const agentId = pickFirstString(
-        call.agent_id,
-        call.agentId,
-        envelope.agent_id,
-        envelope.agentId,
-        payload.agent_id,
-        payload.agentId
-      );
+      const call = payload.call || {};
+      const callId = pickFirstString(call.call_id, payload.call_id, payload.callId);
+      const agentId = pickFirstString(call.agent_id, payload.agent_id, payload.agentId);
 
       if (!callId) return res.json({ success: true });
 
       const analyzed = isAnalyzedEvent(event);
-      const final = isFinalEvent(event);
-      // Algunos tenants de Retell mandan eventos con nombres distintos; si ya hay datos de llamada,
-      // no descartamos el webhook para evitar perder registros tras reset de base.
-      if (!analyzed && !final && !hasCallData(envelope) && !hasCallData(payload)) {
+
+      // 🔒 Solo procesamos cuando Retell termina de analizar la llamada
+      if (!analyzed) {
         return res.json({ success: true });
       }
 
@@ -461,22 +400,11 @@ export async function registerRoutes(
           call.from
         ) || (callType === "web_call" ? "Web Call" : "Unknown");
 
-      const analysis =
-        pickFirstObject(
-          call.call_analysis,
-          call.analysis,
-          envelope.call_analysis,
-          envelope.analysis,
-          payload.call_analysis,
-          payload.analysis
-        ) || {};
+      const analysis = call.call_analysis || payload.call_analysis || {};
       const transcriptSingle =
         pickFirstString(
           call.transcript,
-          call.transcript_text,
-          call.transcription,
           payload.transcript,
-          envelope.transcript,
           call.transcript_text,
           payload.transcript_text,
           call.transcription,
@@ -491,7 +419,6 @@ export async function registerRoutes(
       const transcriptTurns =
         (Array.isArray(call.transcript) ? call.transcript : null) ||
         (Array.isArray(call.transcript_turns) ? call.transcript_turns : null) ||
-        (Array.isArray(envelope.transcript_turns) ? envelope.transcript_turns : null) ||
         (Array.isArray(payload.transcript) ? payload.transcript : null);
 
       if (!transcriptText && transcriptTurns) {
@@ -504,53 +431,24 @@ export async function registerRoutes(
       }
 
       const summary =
-        pickFirstString(
-          analysis.call_summary,
-          analysis.summary,
-          envelope.call_summary,
-          envelope.summary,
-          payload.call_summary,
-          payload.summary
-        ) || (transcriptText ? "Llamada recibida por Retell" : null);
+        pickFirstString(analysis.call_summary, payload.call_summary) ||
+        (transcriptText ? "Llamada recibida por Retell" : null);
 
       const transcriptFinal = transcriptText || analysis?.transcript || null;
-      const recordingUrl =
-        pickFirstString(
-          call.recording_url,
-          call.recordingUrl,
-          envelope.recording_url,
-          envelope.recordingUrl,
-          payload.recording_url,
-          payload.recordingUrl,
-          call.recording?.url,
-          envelope.recording?.url,
-          payload.recording?.url
-        ) || null;
+      const recordingUrl = pickFirstString(call.recording_url, payload.recording_url) || null;
 
-      const durationSec = parseDurationSeconds(
-        call.duration_ms,
-        envelope.duration_ms,
-        payload.duration_ms,
-        call.duration,
-        envelope.duration,
-        payload.duration
-      );
+      const durationMs = call.duration_ms ?? payload.duration_ms ?? 0;
+      const durationSec = typeof durationMs === "number" ? Math.round(durationMs / 1000) : 0;
 
-      const callStatus =
-        pickFirstString(
-          call.call_status,
-          call.status,
-          envelope.call_status,
-          envelope.status,
-          payload.call_status,
-          payload.status
-        ) || "ended";
+      const callStatus = pickFirstString(call.call_status, payload.call_status) || "ended";
 
-      const cad = pickFirstObject(analysis.custom_analysis_data, analysis.customAnalysisData) || {};
+      const cad = analysis.custom_analysis_data || {};
       const leadName = safeString(cad.name, "AI Lead");
       const caseType = safeString(cad.case_type, "General");
       const urgency = safeString(cad.urgency, "Medium");
       const mappedStatus = analyzed ? mapStatusFromAnalysis(analysis) : "New";
+
+      let lead = await storage.getLeadByRetellCallId(callId);
 
       const leadData: any = {
         retellCallId: callId,
@@ -564,8 +462,12 @@ export async function registerRoutes(
         status: mappedStatus,
       };
 
-      if (!analyzed) delete leadData.status;
-      const lead = await storage.upsertLeadByRetellCallId(callId, leadData);
+      if (lead) {
+        if (!analyzed) delete leadData.status;
+        await storage.updateLead(lead.id, leadData);
+      } else {
+        lead = await storage.createLead(leadData);
+      }
 
       const logUpdates: any = {
         leadId: lead.id,
@@ -585,15 +487,9 @@ export async function registerRoutes(
       return res.json({ success: true });
     } catch (err) {
       console.error("Webhook Error:", err);
-      console.error("Webhook Payload:", JSON.stringify(req.body || {}));
       return res.status(200).json({ success: false });
     }
-  };
-
-  // Ruta principal (actual)
-  app.post(api.webhooks.retell.path, retellWebhookHandler);
-  // Ruta legacy documentada en README y usada en varios paneles de Retell
-  app.post("/retell-webhook", retellWebhookHandler);
+  });
 
   return httpServer;
 }

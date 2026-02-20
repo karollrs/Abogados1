@@ -41,7 +41,6 @@ export interface IStorage {
   getLeads(search?: string, status?: string): Promise<Lead[]>;
   getLead(id: number): Promise<Lead | undefined>;
   getLeadByRetellCallId(retellCallId: string): Promise<Lead | undefined>;
-  upsertLeadByRetellCallId(retellCallId: string, updates: UpdateLeadRequest): Promise<Lead>;
   createLead(lead: InsertLead): Promise<Lead>;
   updateLead(id: number, updates: UpdateLeadRequest): Promise<Lead>;
   assignAttorneyToLead(leadId: number, attorneyId: string): Promise<Lead>;
@@ -126,20 +125,6 @@ export class ConvexStorage implements IStorage {
       ...created,
       createdAt: created.createdAt ? new Date(created.createdAt) : null,
       lastContactedAt: created.lastContactedAt ? new Date(created.lastContactedAt) : null,
-    } as any;
-  }
-
-  async upsertLeadByRetellCallId(retellCallId: string, updates: UpdateLeadRequest): Promise<Lead> {
-    const { client, api } = convexClient();
-    const row: any = await client.mutation((api as any).leads.upsertByRetellCallId, {
-      retellCallId,
-      updates: updates as any,
-    });
-
-    return {
-      ...row,
-      createdAt: row.createdAt ? new Date(row.createdAt) : null,
-      lastContactedAt: row.lastContactedAt ? new Date(row.lastContactedAt) : null,
     } as any;
   }
 
