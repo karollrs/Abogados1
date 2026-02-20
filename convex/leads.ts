@@ -2,6 +2,16 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { nextId } from "./helpers";
 
+function normalizePhone(phone: string | undefined): string {
+  if (!phone) return "";
+  return String(phone).replace(/\D+/g, "");
+}
+
+function isRealPhone(phone: string | undefined): boolean {
+  const digits = normalizePhone(phone);
+  return digits.length >= 7;
+}
+
 export const list = query({
   args: { search: v.optional(v.string()), status: v.optional(v.string()) },
   handler: async (ctx, { search, status }) => {
@@ -154,10 +164,12 @@ export const upsertByRetellCallId = mutation({
     updates: v.any(),
   },
   handler: async (ctx, { retellCallId, updates }) => {
-    const existing = await ctx.db
+    const existingRows = await ctx.db
       .query("leads")
       .withIndex("by_retellCallId", (q) => q.eq("retellCallId", retellCallId))
-      .unique();
+      .collect();
+
+    const existing = existingRows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
 
     const allowed = [
       "name",
@@ -178,6 +190,27 @@ export const upsertByRetellCallId = mutation({
     }
 
     if (!existing) {
+      // Dedupe defensivo: si la misma llamada llega con callId inconsistente,
+      // reusar lead reciente por teléfono real para evitar duplicados visibles en CRM.
+      const phone = patch.phone as string | undefined;
+      if (isRealPhone(phone)) {
+        const phoneDigits = normalizePhone(phone);
+        const now = Date.now();
+        const recentWindowMs = 30 * 60 * 1000;
+
+        const recentByPhone = (await ctx.db.query("leads").collect())
+          .filter((l) => isRealPhone(l.phone) && normalizePhone(l.phone) === phoneDigits)
+          .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+
+        if (recentByPhone && now - (recentByPhone.createdAt ?? 0) <= recentWindowMs) {
+          await ctx.db.patch(recentByPhone._id, {
+            retellCallId,
+            ...patch,
+          });
+          return await ctx.db.get(recentByPhone._id);
+        }
+      }
+
       const newId = await nextId(ctx, "leads");
       const now = Date.now();
 
@@ -197,10 +230,13 @@ export const upsertByRetellCallId = mutation({
         createdAt: now,
       });
 
-      return await ctx.db
+      const insertedRows = await ctx.db
         .query("leads")
         .withIndex("by_retellCallId", (q) => q.eq("retellCallId", retellCallId))
-        .unique();
+        .collect();
+      const inserted = insertedRows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+      if (!inserted) throw new Error("Lead upsert failed");
+      return inserted;
     }
 
     await ctx.db.patch(existing._id, {
