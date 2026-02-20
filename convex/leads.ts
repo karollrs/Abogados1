@@ -2,6 +2,22 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { nextId } from "./helpers";
 
+function normalizePhone(phone: string | undefined): string {
+  if (!phone) return "";
+  return String(phone).replace(/\D+/g, "");
+}
+
+function isRealPhone(phone: string | undefined): boolean {
+  const digits = normalizePhone(phone);
+  return digits.length >= 7;
+}
+
+function isFallbackPhoneValue(phone: string | undefined): boolean {
+  if (!phone) return true;
+  const raw = String(phone).trim().toLowerCase();
+  return raw === "unknown" || raw === "web call";
+}
+
 export const list = query({
   args: { search: v.optional(v.string()), status: v.optional(v.string()) },
   handler: async (ctx, { search, status }) => {
@@ -145,5 +161,116 @@ export const assignAttorney = mutation({
     await ctx.db.patch(lead._id, { attorneyId });
 
     return await ctx.db.get(lead._id);
+  },
+});
+
+export const upsertByRetellCallId = mutation({
+  args: {
+    retellCallId: v.string(),
+    updates: v.any(),
+  },
+  handler: async (ctx, { retellCallId, updates }) => {
+    const existingRows = await ctx.db
+      .query("leads")
+      .withIndex("by_retellCallId", (q) => q.eq("retellCallId", retellCallId))
+      .collect();
+
+    const existing = existingRows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+
+    const allowed = [
+      "name",
+      "phone",
+      "caseType",
+      "urgency",
+      "status",
+      "attorneyId",
+      "retellAgentId",
+      "summary",
+      "transcript",
+      "lastContactedAt",
+    ];
+
+    const patch: any = {};
+    for (const k of allowed) {
+      if (updates?.[k] !== undefined) patch[k] = updates[k];
+    }
+
+    if (!existing) {
+      // Dedupe defensivo: si la misma llamada llega con callId inconsistente,
+      // reusar lead reciente por teléfono real para evitar duplicados visibles en CRM.
+      const phone = patch.phone as string | undefined;
+      const now = Date.now();
+      const recentWindowMs = 30 * 60 * 1000;
+
+      if (isRealPhone(phone)) {
+        const phoneDigits = normalizePhone(phone);
+
+        const recentByPhone = (await ctx.db.query("leads").collect())
+          .filter((l) => isRealPhone(l.phone) && normalizePhone(l.phone) === phoneDigits)
+          .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+
+        if (recentByPhone && now - (recentByPhone.createdAt ?? 0) <= recentWindowMs) {
+          await ctx.db.patch(recentByPhone._id, {
+            retellCallId,
+            ...patch,
+          });
+          return await ctx.db.get(recentByPhone._id);
+        }
+      }
+
+      // Fallback adicional: si la primera notificación llegó sin teléfono real (Unknown/Web Call)
+      // y luego llega otra para la misma llamada con otro callId, reutilizamos el lead reciente
+      // por agente en la misma ventana para no duplicar en CRM.
+      const recentByAgentFallback = (await ctx.db.query("leads").collect())
+        .filter((l) => {
+          const sameAgent =
+            patch.retellAgentId && l.retellAgentId && String(l.retellAgentId) === String(patch.retellAgentId);
+          const fresh = now - (l.createdAt ?? 0) <= recentWindowMs;
+          const fallbackPhone = isFallbackPhoneValue(l.phone) || !isRealPhone(l.phone);
+          return Boolean(sameAgent && fresh && fallbackPhone);
+        })
+        .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+
+      if (recentByAgentFallback) {
+        await ctx.db.patch(recentByAgentFallback._id, {
+          retellCallId,
+          ...patch,
+        });
+        return await ctx.db.get(recentByAgentFallback._id);
+      }
+
+      const newId = await nextId(ctx, "leads");
+
+      await ctx.db.insert("leads", {
+        id: newId,
+        retellCallId,
+        retellAgentId: patch.retellAgentId,
+        name: patch.name ?? "AI Lead",
+        phone: patch.phone ?? "Unknown",
+        caseType: patch.caseType,
+        urgency: patch.urgency,
+        status: patch.status ?? "New",
+        summary: patch.summary,
+        transcript: patch.transcript,
+        attorneyId: patch.attorneyId,
+        lastContactedAt: patch.lastContactedAt,
+        createdAt: now,
+      });
+
+      const insertedRows = await ctx.db
+        .query("leads")
+        .withIndex("by_retellCallId", (q) => q.eq("retellCallId", retellCallId))
+        .collect();
+      const inserted = insertedRows.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+      if (!inserted) throw new Error("Lead upsert failed");
+      return inserted;
+    }
+
+    await ctx.db.patch(existing._id, {
+      retellCallId,
+      ...patch,
+    });
+
+    return await ctx.db.get(existing._id);
   },
 });
