@@ -12,6 +12,12 @@ function isRealPhone(phone: string | undefined): boolean {
   return digits.length >= 7;
 }
 
+function isFallbackPhoneValue(phone: string | undefined): boolean {
+  if (!phone) return true;
+  const raw = String(phone).trim().toLowerCase();
+  return raw === "unknown" || raw === "web call";
+}
+
 export const list = query({
   args: { search: v.optional(v.string()), status: v.optional(v.string()) },
   handler: async (ctx, { search, status }) => {
@@ -193,10 +199,11 @@ export const upsertByRetellCallId = mutation({
       // Dedupe defensivo: si la misma llamada llega con callId inconsistente,
       // reusar lead reciente por teléfono real para evitar duplicados visibles en CRM.
       const phone = patch.phone as string | undefined;
+      const now = Date.now();
+      const recentWindowMs = 30 * 60 * 1000;
+
       if (isRealPhone(phone)) {
         const phoneDigits = normalizePhone(phone);
-        const now = Date.now();
-        const recentWindowMs = 30 * 60 * 1000;
 
         const recentByPhone = (await ctx.db.query("leads").collect())
           .filter((l) => isRealPhone(l.phone) && normalizePhone(l.phone) === phoneDigits)
@@ -211,8 +218,28 @@ export const upsertByRetellCallId = mutation({
         }
       }
 
+      // Fallback adicional: si la primera notificación llegó sin teléfono real (Unknown/Web Call)
+      // y luego llega otra para la misma llamada con otro callId, reutilizamos el lead reciente
+      // por agente en la misma ventana para no duplicar en CRM.
+      const recentByAgentFallback = (await ctx.db.query("leads").collect())
+        .filter((l) => {
+          const sameAgent =
+            patch.retellAgentId && l.retellAgentId && String(l.retellAgentId) === String(patch.retellAgentId);
+          const fresh = now - (l.createdAt ?? 0) <= recentWindowMs;
+          const fallbackPhone = isFallbackPhoneValue(l.phone) || !isRealPhone(l.phone);
+          return Boolean(sameAgent && fresh && fallbackPhone);
+        })
+        .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+
+      if (recentByAgentFallback) {
+        await ctx.db.patch(recentByAgentFallback._id, {
+          retellCallId,
+          ...patch,
+        });
+        return await ctx.db.get(recentByAgentFallback._id);
+      }
+
       const newId = await nextId(ctx, "leads");
-      const now = Date.now();
 
       await ctx.db.insert("leads", {
         id: newId,
