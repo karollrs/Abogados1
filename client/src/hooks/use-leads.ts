@@ -6,21 +6,31 @@ type RetellWebhookPayload = Record<string, unknown>;
 
 export function useLeads(search?: string, status?: string) {
   return useQuery({
-    queryKey: [api.leads.list.path, search, status],
-    queryFn: async () => {
-      const params: Record<string, string> = {};
-      if (search) params.search = search;
-      if (status) params.status = status;
-      
-      const queryString = new URLSearchParams(params).toString();
-      const url = `${api.leads.list.path}?${queryString}`;
-      
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch leads");
-      return await res.json();
+  queryKey: [api.leads.list.path, search ?? "", status ?? ""],
+  queryFn: async () => {
+    const params: Record<string, string> = {};
+    if (search) params.search = search;
+    if (status) params.status = status;
 
-    },
-  });
+    const queryString = new URLSearchParams(params).toString();
+
+    const url = queryString
+      ? `${api.leads.list.path}?${queryString}`
+      : api.leads.list.path;
+
+    const res = await fetch(url, {
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    if (!res.ok) throw new Error("Failed to fetch leads");
+
+    return await res.json();
+  },
+  staleTime: 0,
+  refetchOnMount: "always",
+  refetchOnWindowFocus: true,
+});
 }
 
 export function useLead(id: number) {

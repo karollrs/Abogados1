@@ -269,9 +269,9 @@ export async function registerRoutes(
       // 🔎 Traer leads si la intención lo sugiere
       if (msg.includes("lead")) {
   const leads = await client.query(
-    convexGeneratedApi.leads.getAll,
-    {}
-  );
+  convexGeneratedApi.leads.list,
+  {}
+);
 
   leadsData = leads.slice(0, 10).map((l: any) => ({
     id: l.id,
@@ -286,7 +286,7 @@ export async function registerRoutes(
       // 🔎 Traer llamadas si la intención lo sugiere
       if (msg.includes("call") || msg.includes("llamada")) {
         const calls = await client.query(
-  convexGeneratedApi.callLogs.getRecent,
+  convexGeneratedApi.callLogs.listWithLead,
   {}
 );
         callsData = calls.slice(0, 10).map((c: any) => ({

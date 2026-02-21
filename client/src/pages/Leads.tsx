@@ -92,9 +92,11 @@ export default function Leads() {
   const [, setLocation] = useLocation();
 
   const { data: leads, isLoading, error } = useLeads(
+    
     search.trim() || undefined,
     status === "all" ? undefined : status
   );
+  console.log("LEADS DATA:", leads);
 
   const { data: callLogs } = useCallLogs();
 

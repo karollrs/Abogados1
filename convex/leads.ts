@@ -34,7 +34,7 @@ export const list = query({
   args: { search: v.optional(v.string()), status: v.optional(v.string()) },
   handler: async (ctx, { search, status }) => {
     const rows = await ctx.db.query("leads").collect();
-    const statusFilter = normalizeLeadStatus(status);
+    const statusFilter = status ? normalizeLeadStatus(status) : undefined;
     const normalizedRows = rows.map((l) => ({
       ...l,
       status: normalizeLeadStatus(l.status),
@@ -47,8 +47,8 @@ export const list = query({
     );
 
     const statusFiltered = statusFilter
-      ? sorted.filter((l) => normalizeLeadStatus(l.status) === statusFilter)
-      : sorted;
+  ? sorted.filter((l) => normalizeLeadStatus(l.status) === statusFilter)
+  : sorted;
 
     if (!s) return statusFiltered;
 
