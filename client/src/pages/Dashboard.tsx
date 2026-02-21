@@ -17,6 +17,7 @@ import { useUser } from "@/hooks/use-auth";
 import { useCallLogs } from "@/hooks/use-call-logs";
 import { useLeads, useStats } from "@/hooks/use-leads";
 import type { Lead } from "@shared/types";
+import { AIAssistant } from "@/components/AIAssistant";
 
 const chartData = [
   { name: "Family Law", value: 400, color: "#3b82f6" },
@@ -25,10 +26,12 @@ const chartData = [
   { name: "Traffic", value: 200, color: "#f59e0b" },
 ];
 
+
 function AdminAgentDashboardView({ role }: { role: "admin" | "agent" }) {
   const { data: stats, isLoading: statsLoading } = useStats();
   const { data: leads, isLoading: leadsLoading } = useLeads();
   const { data: callLogs } = useCallLogs();
+  const [aiOpen, setAiOpen] = useState(false);
   const isAdmin = role === "admin";
 
   const pendientes = (callLogs || []).filter(
@@ -143,6 +146,7 @@ function AdminAgentDashboardView({ role }: { role: "admin" | "agent" }) {
             </>
           ) : null}
         </div>
+        
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-8">
           <StatsCard
@@ -166,6 +170,24 @@ function AdminAgentDashboardView({ role }: { role: "admin" | "agent" }) {
             subtitle="Ya asignadas en CRM"
           />
         </div>
+
+        {/* ================= TARJETA IA ================= */}
+
+<div className="mb-8 flex justify-center">
+  <div
+    onClick={() => setAiOpen(true)}
+    className="cursor-pointer bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-between"
+  >
+    <div className="text-center w-full">
+      <h3 className="text-lg font-semibold text-foreground">
+        🤖 Asistente Inteligente CRM
+      </h3>
+      <p className="text-sm text-muted-foreground mt-1">
+        Consulta leads, llamadas y métricas con lenguaje natural.
+      </p>
+    </div>
+  </div>
+</div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 bg-card rounded-2xl border border-border p-4 shadow-sm inline-block">
@@ -217,7 +239,42 @@ function AdminAgentDashboardView({ role }: { role: "admin" | "agent" }) {
           <div className="lg:col-span-2">
             <LeadsTable leads={filteredLeads} isLoading={leadsLoading} />
           </div>
+                </div>
+
+        {aiOpen && (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl h-[650px] relative flex flex-col overflow-hidden">
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary text-lg">
+            🤖
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">AI CRM Assistant</h2>
+            <p className="text-xs text-muted-foreground">
+              Consulta información del CRM
+            </p>
+          </div>
         </div>
+
+        <button
+          onClick={() => setAiOpen(false)}
+          className="text-muted-foreground hover:text-foreground transition"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Chat Area */}
+      <div className="flex-1 p-6 overflow-y-auto bg-background">
+        <AIAssistant />
+      </div>
+
+    </div>
+  </div>
+)}
       </main>
     </div>
   );
@@ -285,9 +342,10 @@ function AttorneyDashboardView() {
             subtitle="No aceptadas"
           />
         </div>
-
+        
       </main>
     </div>
+    
   );
 }
 

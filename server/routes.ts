@@ -6,6 +6,9 @@ import { requireAuth, requireAdmin } from "./auth";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { sendAttorneyAssignmentEmail } from "./mailer";
+import { openrouter } from "./services/ai";
+import { convexClient } from "./convexClient";
+
 
 /* ============================================================
    HELPERS
@@ -213,6 +216,7 @@ function toPublicUser(u: any) {
   };
 }
 
+
 /* ============================================================
    ROUTES
 ============================================================ */
@@ -221,6 +225,8 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+
 
   /* ================= AUTH GUARD ================= */
 
@@ -237,6 +243,102 @@ export async function registerRoutes(
 
     return requireAuth(req as any, res as any, next);
   });
+
+  /* ============================================================
+     AI ASSISTANT (CONSULTIVO)
+  ============================================================ */
+  /* ============================================================
+     AI ASSISTANT (CONSULTIVO)
+  ============================================================ */
+
+  app.post("/api/ai-assistant", async (req, res) => {
+    try {
+      const message = safeString(req.body?.message).trim();
+      if (!message) {
+        return res.status(400).json({ error: "Message required" });
+      }
+
+      const msg = message.toLowerCase();
+
+      // 🔥 OBTENER CLIENTE CORRECTO DE CONVEX
+      const { client, api: convexGeneratedApi } = convexClient();
+
+      let leadsData: any[] = [];
+      let callsData: any[] = [];
+
+      // 🔎 Traer leads si la intención lo sugiere
+      if (msg.includes("lead")) {
+        const leads = await client.query(
+          (convexGeneratedApi as any).leads.getAll,
+          {}
+        );
+        leadsData = leads.slice(0, 10).map((l: any) => ({
+          id: l.id,
+          name: l.name,
+          status: l.status,
+          caseType: l.caseType,
+          urgency: l.urgency,
+          createdAt: l.createdAt,
+        }));
+      }
+
+      // 🔎 Traer llamadas si la intención lo sugiere
+      if (msg.includes("call") || msg.includes("llamada")) {
+        const calls = await client.query(
+          (convexGeneratedApi as any).callLogs.getRecent,
+          {}
+        );
+        callsData = calls.slice(0, 10).map((c: any) => ({
+          retellCallId: c.retellCallId,
+          status: c.status,
+          duration: c.duration,
+          city: c.city,
+          stateProvince: c.stateProvince,
+          createdAt: c.createdAt,
+        }));
+      }
+
+      // 🧠 Enviar contexto a OpenRouter
+      const completion = await openrouter.chat.completions.create({
+        model: "openai/gpt-4o-mini",
+        temperature: 0.3,
+        messages: [
+          {
+            role: "system",
+            content: `
+You are an AI assistant inside a law firm CRM.
+You must answer ONLY using the provided CRM data.
+If the data is not available, say that clearly.
+Be concise and professional.
+            `,
+          },
+          {
+            role: "user",
+            content: `
+USER QUESTION:
+${message}
+
+CRM DATA:
+Leads:
+${JSON.stringify(leadsData, null, 2)}
+
+Recent Calls:
+${JSON.stringify(callsData, null, 2)}
+            `,
+          },
+        ],
+      });
+
+      return res.json({
+        reply: completion.choices[0].message.content ?? "",
+      });
+
+    } catch (error) {
+      console.error("AI Error:", error);
+      return res.status(500).json({ error: "AI assistant failed" });
+    }
+  });
+
 
   /* ================= LOGIN ================= */
 
@@ -287,7 +389,7 @@ export async function registerRoutes(
   });
 
   app.post("/api/auth/logout", async (req: any, res) => {
-    req.session?.destroy?.(() => {});
+    req.session?.destroy?.(() => { });
     res.clearCookie?.("connect.sid");
     return res.json({ success: true });
   });
@@ -348,8 +450,8 @@ export async function registerRoutes(
         typeof isActiveRaw === "boolean"
           ? isActiveRaw
           : String(isActiveRaw ?? "")
-              .toLowerCase()
-              .trim() === "true";
+            .toLowerCase()
+            .trim() === "true";
 
       if (!id) {
         return res.status(400).json({ message: "id es obligatorio" });
@@ -512,10 +614,10 @@ export async function registerRoutes(
       const targetLog =
         (retellCallId
           ? logs.find(
-              (l: any) =>
-                String(l?.retellCallId ?? "") === retellCallId &&
-                Number(l?.leadId ?? 0) === leadId
-            )
+            (l: any) =>
+              String(l?.retellCallId ?? "") === retellCallId &&
+              Number(l?.leadId ?? 0) === leadId
+          )
           : null) ??
         logs
           .filter((l: any) => Number(l?.leadId) === leadId)
@@ -546,8 +648,8 @@ export async function registerRoutes(
         process.env.APP_URL?.trim() || `${req.protocol}://${req.get("host")}`;
       const assignedCallUrl = assignedCall?.retellCallId
         ? `${appBaseUrl}/attorney-call?callId=${encodeURIComponent(
-            String(assignedCall.retellCallId)
-          )}`
+          String(assignedCall.retellCallId)
+        )}`
         : `${appBaseUrl}/attorney-call`;
       let mailSent = false;
       let mailError: string | null = null;
@@ -867,22 +969,22 @@ export async function registerRoutes(
         call,
         analysisFromWebhook
       );
-      
+
       const shouldTryRetellLookup =
-  !!callId &&
-  (isAnalyzedEvent(event) || isFinalEvent(event)) &&
-  !provisionalRecordingUrl;
+        !!callId &&
+        (isAnalyzedEvent(event) || isFinalEvent(event)) &&
+        !provisionalRecordingUrl;
 
       const retellCallDetails = shouldTryRetellLookup
         ? await fetchRetellCallById(callId)
         : null;
-        console.log(
-  `[RETELL DEBUG] lookup callId=${callId} hasRecording=${Boolean(
-    retellCallDetails?.recording_url ||
-    retellCallDetails?.recordingUrl ||
-    retellCallDetails?.scrubbed_recording_url
-  )}`
-);
+      console.log(
+        `[RETELL DEBUG] lookup callId=${callId} hasRecording=${Boolean(
+          retellCallDetails?.recording_url ||
+          retellCallDetails?.recordingUrl ||
+          retellCallDetails?.scrubbed_recording_url
+        )}`
+      );
 
       const analysis =
         Object.keys(analysisFromWebhook || {}).length > 0
@@ -904,21 +1006,21 @@ export async function registerRoutes(
           : 0;
 
       let recordingUrl = extractRecordingUrl(
-  payload,
-  call,
-  analysis,
-  retellCallDetails
-);
+        payload,
+        call,
+        analysis,
+        retellCallDetails
+      );
 
-if (!recordingUrl && retellCallDetails) {
-  recordingUrl = pickFirstString(
-    retellCallDetails.recording_url,
-    retellCallDetails.recordingUrl,
-    retellCallDetails.scrubbed_recording_url,
-    retellCallDetails.recording_multi_channel_url,
-    retellCallDetails.scrubbed_recording_multi_channel_url
-  );
-}
+      if (!recordingUrl && retellCallDetails) {
+        recordingUrl = pickFirstString(
+          retellCallDetails.recording_url,
+          retellCallDetails.recordingUrl,
+          retellCallDetails.scrubbed_recording_url,
+          retellCallDetails.recording_multi_channel_url,
+          retellCallDetails.scrubbed_recording_multi_channel_url
+        );
+      }
       const looksProcessable =
         isAnalyzedEvent(event) ||
         isFinalEvent(event) ||
