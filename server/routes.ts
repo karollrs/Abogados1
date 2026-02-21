@@ -264,16 +264,33 @@ export async function registerRoutes(
       const { client, api: convexGeneratedApi } = convexClient();
 
       let leadsData: any[] = [];
-      let callsData: any[] = [];
+let callsData: any[] = [];
+let structuredContext = "No leads data requested or available.";
 
-      // 🔎 Traer leads si la intención lo sugiere
-      if (msg.includes("lead")) {
-  const leads = await client.query(
-  convexGeneratedApi.leads.list,
-  {}
-);
+const wantsLeads =
+  msg.includes("lead") ||
+  msg.includes("cliente") ||
+  msg.includes("clientes") ||
+  msg.includes("pendiente") ||
+  msg.includes("asignada") ||
+  msg.includes("asignados") ||
+  msg.includes("cuántos") ||
+  msg.includes("cuantos");
 
-  leadsData = leads.slice(0, 10).map((l: any) => ({
+if (wantsLeads) {
+  const allLeads = await client.query(convexGeneratedApi.leads.list, {});
+
+  const totalLeadsCount = allLeads.length;
+
+  const pendingCount = allLeads.filter(
+    (l: any) => String(l.status).toLowerCase() === "pendiente"
+  ).length;
+
+  const assignedCount = allLeads.filter(
+    (l: any) => String(l.status).toLowerCase() === "asignada"
+  ).length;
+
+  leadsData = allLeads.slice(0, 10).map((l: any) => ({
     id: l.id,
     name: l.name,
     status: l.status,
@@ -281,37 +298,63 @@ export async function registerRoutes(
     urgency: l.urgency,
     createdAt: l.createdAt,
   }));
-}
 
+  structuredContext = `
+LEADS SUMMARY:
+Total leads (real): ${totalLeadsCount}
+Pending leads (real): ${pendingCount}
+Assigned leads (real): ${assignedCount}
+Showing first ${leadsData.length} records:
+
+${JSON.stringify(leadsData, null, 2)}
+`;
+}
       // 🔎 Traer llamadas si la intención lo sugiere
       if (msg.includes("call") || msg.includes("llamada")) {
-        const calls = await client.query(
-  convexGeneratedApi.callLogs.listWithLead,
-  {}
-);
-        callsData = calls.slice(0, 10).map((c: any) => ({
-          retellCallId: c.retellCallId,
-          status: c.status,
-          duration: c.duration,
-          city: c.city,
-          stateProvince: c.stateProvince,
-          createdAt: c.createdAt,
-        }));
-      }
+  const allCalls = await client.query(
+    convexGeneratedApi.callLogs.listWithLead,
+    {}
+  );
+
+  const totalCalls = allCalls.length;
+
+  const endedCalls = allCalls.filter(
+    (c: any) => String(c.status).toLowerCase() === "ended"
+  ).length;
+
+  callsData = allCalls.slice(0, 10);
+
+  structuredContext += `
+
+CALLS SUMMARY:
+Total calls (real): ${totalCalls}
+Ended calls: ${endedCalls}
+Showing first ${callsData.length} records:
+
+${JSON.stringify(callsData, null, 2)}
+`;
+}
 
       // 🧠 Enviar contexto a OpenRouter
       const completion = await openrouter.chat.completions.create({
         model: "openai/gpt-4o-mini",
-        temperature: 0.3,
+        temperature: 0.1,
         messages: [
           {
             role: "system",
             content: `
-You are an AI assistant inside a law firm CRM.
-You must answer ONLY using the provided CRM data.
-If the data is not available, say that clearly.
-Be concise and professional.
-            `,
+You are a senior CRM data analyst inside a law firm.
+
+STRICT RULES:
+- You MUST answer only using the provided CRM DATA.
+- You MUST count and analyze the data explicitly before answering.
+- If the data is empty, say clearly: "There is no data available."
+- Never invent information.
+- Be precise and numerical when possible.
+- If the question asks for totals, compute them.
+- If the question asks for pending leads, filter by status = "pendiente".
+- Respond in Spanish.
+`
           },
           {
             role: "user",
@@ -320,8 +363,7 @@ USER QUESTION:
 ${message}
 
 CRM DATA:
-Leads:
-${JSON.stringify(leadsData, null, 2)}
+${structuredContext}
 
 Recent Calls:
 ${JSON.stringify(callsData, null, 2)}
