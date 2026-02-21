@@ -268,24 +268,25 @@ export async function registerRoutes(
 
       // 🔎 Traer leads si la intención lo sugiere
       if (msg.includes("lead")) {
-        const leads = await client.query(
-  client.query(convexGeneratedApi.leads.getAll),
-  {}
-);
-        leadsData = leads.slice(0, 10).map((l: any) => ({
-          id: l.id,
-          name: l.name,
-          status: l.status,
-          caseType: l.caseType,
-          urgency: l.urgency,
-          createdAt: l.createdAt,
-        }));
-      }
+  const leads = await client.query(
+    convexGeneratedApi.leads.getAll,
+    {}
+  );
+
+  leadsData = leads.slice(0, 10).map((l: any) => ({
+    id: l.id,
+    name: l.name,
+    status: l.status,
+    caseType: l.caseType,
+    urgency: l.urgency,
+    createdAt: l.createdAt,
+  }));
+}
 
       // 🔎 Traer llamadas si la intención lo sugiere
       if (msg.includes("call") || msg.includes("llamada")) {
         const calls = await client.query(
-  (convexGeneratedApi as any).callLogs.getRecent,
+  convexGeneratedApi.callLogs.getRecent,
   {}
 );
         callsData = calls.slice(0, 10).map((c: any) => ({
