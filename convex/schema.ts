@@ -50,6 +50,9 @@ attorneys: defineTable({
     transcript: v.optional(v.string()),
     lastContactedAt: v.optional(v.number()),
     createdAt: v.number(),
+email: v.optional(v.string()),
+city: v.optional(v.string()),
+age: v.optional(v.number()),
   })
     
     .index("by_status", ["status"])

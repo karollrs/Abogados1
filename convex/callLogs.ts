@@ -69,6 +69,11 @@ export const listWithLead = query({
           caseType: lead?.caseType ?? (log as any).caseType ?? null,
           urgency: lead?.urgency ?? null,
           attorneyId: lead?.attorneyId ?? null,
+          leadPhone: lead?.phone ?? null,
+          leadEmail: lead?.email ?? null,
+          leadCity: lead?.city ?? log.city ?? null,
+          leadAge: (lead as any)?.age ?? null,
+          leadStatus: lead?.status ?? null,
         };
       })
       .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
