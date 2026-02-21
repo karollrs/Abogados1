@@ -306,7 +306,7 @@ function AttorneyDashboardView() {
 
       <main className="flex-1 md:ml-64 p-4 md:p-8 animate-in">
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Dashboard de Abogado</h1>
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground mt-1">
             Estadisticas de tus casos y llamadas asignadas.
           </p>

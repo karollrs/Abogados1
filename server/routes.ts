@@ -226,7 +226,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-
+  
 
   /* ================= AUTH GUARD ================= */
 
@@ -269,9 +269,9 @@ export async function registerRoutes(
       // 🔎 Traer leads si la intención lo sugiere
       if (msg.includes("lead")) {
         const leads = await client.query(
-          (convexGeneratedApi as any).leads.getAll,
-          {}
-        );
+  client.query(convexGeneratedApi.leads.getAll),
+  {}
+);
         leadsData = leads.slice(0, 10).map((l: any) => ({
           id: l.id,
           name: l.name,
@@ -285,9 +285,9 @@ export async function registerRoutes(
       // 🔎 Traer llamadas si la intención lo sugiere
       if (msg.includes("call") || msg.includes("llamada")) {
         const calls = await client.query(
-          (convexGeneratedApi as any).callLogs.getRecent,
-          {}
-        );
+  (convexGeneratedApi as any).callLogs.getRecent,
+  {}
+);
         callsData = calls.slice(0, 10).map((c: any) => ({
           retellCallId: c.retellCallId,
           status: c.status,
@@ -338,7 +338,7 @@ ${JSON.stringify(callsData, null, 2)}
       return res.status(500).json({ error: "AI assistant failed" });
     }
   });
-
+ 
 
   /* ================= LOGIN ================= */
 
@@ -389,7 +389,7 @@ ${JSON.stringify(callsData, null, 2)}
   });
 
   app.post("/api/auth/logout", async (req: any, res) => {
-    req.session?.destroy?.(() => { });
+    req.session?.destroy?.(() => {});
     res.clearCookie?.("connect.sid");
     return res.json({ success: true });
   });
@@ -450,8 +450,8 @@ ${JSON.stringify(callsData, null, 2)}
         typeof isActiveRaw === "boolean"
           ? isActiveRaw
           : String(isActiveRaw ?? "")
-            .toLowerCase()
-            .trim() === "true";
+              .toLowerCase()
+              .trim() === "true";
 
       if (!id) {
         return res.status(400).json({ message: "id es obligatorio" });
@@ -614,10 +614,10 @@ ${JSON.stringify(callsData, null, 2)}
       const targetLog =
         (retellCallId
           ? logs.find(
-            (l: any) =>
-              String(l?.retellCallId ?? "") === retellCallId &&
-              Number(l?.leadId ?? 0) === leadId
-          )
+              (l: any) =>
+                String(l?.retellCallId ?? "") === retellCallId &&
+                Number(l?.leadId ?? 0) === leadId
+            )
           : null) ??
         logs
           .filter((l: any) => Number(l?.leadId) === leadId)
@@ -648,8 +648,8 @@ ${JSON.stringify(callsData, null, 2)}
         process.env.APP_URL?.trim() || `${req.protocol}://${req.get("host")}`;
       const assignedCallUrl = assignedCall?.retellCallId
         ? `${appBaseUrl}/attorney-call?callId=${encodeURIComponent(
-          String(assignedCall.retellCallId)
-        )}`
+            String(assignedCall.retellCallId)
+          )}`
         : `${appBaseUrl}/attorney-call`;
       let mailSent = false;
       let mailError: string | null = null;
@@ -969,22 +969,22 @@ ${JSON.stringify(callsData, null, 2)}
         call,
         analysisFromWebhook
       );
-
+      
       const shouldTryRetellLookup =
-        !!callId &&
-        (isAnalyzedEvent(event) || isFinalEvent(event)) &&
-        !provisionalRecordingUrl;
+  !!callId &&
+  (isAnalyzedEvent(event) || isFinalEvent(event)) &&
+  !provisionalRecordingUrl;
 
       const retellCallDetails = shouldTryRetellLookup
         ? await fetchRetellCallById(callId)
         : null;
-      console.log(
-        `[RETELL DEBUG] lookup callId=${callId} hasRecording=${Boolean(
-          retellCallDetails?.recording_url ||
-          retellCallDetails?.recordingUrl ||
-          retellCallDetails?.scrubbed_recording_url
-        )}`
-      );
+        console.log(
+  `[RETELL DEBUG] lookup callId=${callId} hasRecording=${Boolean(
+    retellCallDetails?.recording_url ||
+    retellCallDetails?.recordingUrl ||
+    retellCallDetails?.scrubbed_recording_url
+  )}`
+);
 
       const analysis =
         Object.keys(analysisFromWebhook || {}).length > 0
@@ -1006,21 +1006,21 @@ ${JSON.stringify(callsData, null, 2)}
           : 0;
 
       let recordingUrl = extractRecordingUrl(
-        payload,
-        call,
-        analysis,
-        retellCallDetails
-      );
+  payload,
+  call,
+  analysis,
+  retellCallDetails
+);
 
-      if (!recordingUrl && retellCallDetails) {
-        recordingUrl = pickFirstString(
-          retellCallDetails.recording_url,
-          retellCallDetails.recordingUrl,
-          retellCallDetails.scrubbed_recording_url,
-          retellCallDetails.recording_multi_channel_url,
-          retellCallDetails.scrubbed_recording_multi_channel_url
-        );
-      }
+if (!recordingUrl && retellCallDetails) {
+  recordingUrl = pickFirstString(
+    retellCallDetails.recording_url,
+    retellCallDetails.recordingUrl,
+    retellCallDetails.scrubbed_recording_url,
+    retellCallDetails.recording_multi_channel_url,
+    retellCallDetails.scrubbed_recording_multi_channel_url
+  );
+}
       const looksProcessable =
         isAnalyzedEvent(event) ||
         isFinalEvent(event) ||
