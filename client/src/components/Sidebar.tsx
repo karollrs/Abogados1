@@ -8,6 +8,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { useLogout, useUser } from "@/hooks/use-auth";
+import { queryClient } from "@/lib/queryClient";
 
 const adminAgentNavigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -26,6 +27,16 @@ export function Sidebar() {
   const [location] = useLocation();
   const { data: user } = useUser();
   const logout = useLogout();
+  const [, navigate] = useLocation();
+
+  const handleLogout = async () => {
+    // UI inmediata
+    queryClient.setQueryData(["/api/auth/me"], null);
+    navigate("/login");
+
+    // Backend después
+    await logout.mutateAsync();
+  };
 
   // ✅ Solo admins ven "Usuarios"
   const baseNavigation =
@@ -63,19 +74,17 @@ export function Sidebar() {
               <div
                 className={`
                   group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer
-                  ${
-                    isActive
-                      ? "bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ${isActive
+                    ? "bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }
                 `}
               >
                 <item.icon
-                  className={`h-5 w-5 transition-colors ${
-                    isActive
+                  className={`h-5 w-5 transition-colors ${isActive
                       ? "text-primary"
                       : "text-muted-foreground group-hover:text-foreground"
-                  }`}
+                    }`}
                 />
                 {item.name}
               </div>
@@ -101,7 +110,7 @@ export function Sidebar() {
         ) : null}
 
         <button
-          onClick={() => logout.mutate()}
+          onClick={handleLogout}
           className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
         >
           <LogOut className="h-5 w-5" />

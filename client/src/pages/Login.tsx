@@ -2,6 +2,7 @@
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useLocation } from "wouter";
 import { useLogin } from "@/hooks/use-auth";
+import { queryClient } from "@/lib/queryClient";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -12,39 +13,42 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const login = useLogin();
 
+
   async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (loading || login.isPending) return;
+  e.preventDefault();
+  if (loading || login.isPending) return;
 
-    setError(null);
-    setLoading(true);
+  setError(null);
+  setLoading(true);
 
-    try {
-      const form = e.currentTarget as HTMLFormElement;
-      const fd = new FormData(form);
+  try {
+    const form = e.currentTarget as HTMLFormElement;
+    const fd = new FormData(form);
 
-      const submittedEmail = String(fd.get("email") ?? "").trim();
-      const submittedPassword = String(fd.get("password") ?? "");
+    const submittedEmail = String(fd.get("email") ?? "").trim();
+    const submittedPassword = String(fd.get("password") ?? "");
 
-      if (!submittedEmail || !submittedPassword) {
-        throw new Error("Email y password obligatorios");
-      }
-
-      setEmail(submittedEmail);
-      setPassword(submittedPassword);
-
-      const data = await login.mutateAsync({
-        email: submittedEmail,
-        password: submittedPassword,
-      });
-
-      navigate("/");
-    } catch (err: any) {
-      setError(err?.message || "No se pudo iniciar sesion");
-    } finally {
-      setLoading(false);
+    if (!submittedEmail || !submittedPassword) {
+      throw new Error("Email y password obligatorios");
     }
+
+    await login.mutateAsync({
+      email: submittedEmail,
+      password: submittedPassword,
+    });
+
+    // 👇 forzamos sincronización real
+    await queryClient.invalidateQueries({
+      queryKey: ["/api/auth/me"],
+    });
+
+    navigate("/");
+  } catch (err: any) {
+    setError(err?.message || "No se pudo iniciar sesión");
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-blue-100 to-blue-50 p-6">

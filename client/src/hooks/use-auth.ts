@@ -26,6 +26,9 @@ export function useUser() {
   return useQuery<User | null>({
     queryKey: ["/api/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }) as any,
+    staleTime: Infinity,           // 👈 importante
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 }
 
@@ -46,11 +49,9 @@ export function useLogout() {
   return useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/auth/logout");
-      return true;
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/auth/me"], null);
-      queryClient.invalidateQueries();
     },
   });
 }

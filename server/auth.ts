@@ -43,22 +43,22 @@ export function setupAuth(app: Express) {
   const sessionSecret = process.env.SESSION_SECRET || "dev-secret-change-me";
   const MemoryStore = MemoryStoreFactory(session);
 
-  app.set("trust proxy", 1);
+app.set("trust proxy", 1);
 
-  app.use(
-    session({
-      store: new MemoryStore({ checkPeriod: 1000 * 60 * 60 * 24 }),
-      secret: sessionSecret,
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 1000 * 60 * 60 * 24 * 7,
-      },
-    })
-  );
+app.use(
+  session({
+    store: new MemoryStore({ checkPeriod: 1000 * 60 * 60 * 24 }),
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: true,        // obligatorio en HTTPS
+      sameSite: "lax",    
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+    },
+  })
+);
 
   app.use(passport.initialize());
   app.use(passport.session());
