@@ -1,14 +1,25 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter } from "react-router-dom";
+import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
-import { queryClient } from "@/lib/queryClient";
 import "./index.css";
+
+const convex = new ConvexReactClient(
+  import.meta.env.VITE_CONVEX_URL
+);
+
+const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
+    <BrowserRouter>
+      <ConvexProvider client={convex}>
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </ConvexProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

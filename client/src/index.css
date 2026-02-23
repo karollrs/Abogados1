@@ -52,6 +52,9 @@
   }
 }
 
+.input-modern {
+  @apply w-full rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 p-3 transition;
+}
 @layer utilities {
   .glass-card {
     @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-xl shadow-black/5;
@@ -75,3 +78,4 @@
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
+

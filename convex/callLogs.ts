@@ -158,6 +158,7 @@ export const upsertByRetellCallId = mutation({
           summaryFromAnalysis ??
           existing.summary ??
           null,
+          extraFields: updates.extraFields ?? existing.extraFields ?? [],
       });
 
       const updated = await ctx.db.get(existing._id);
@@ -196,6 +197,7 @@ export const upsertByRetellCallId = mutation({
         createdAt: now,
         ...updates,
         summary: updates.summary ?? summaryFromAnalysis ?? null,
+        extraFields: updates.extraFields ?? [],
       });
 
       const inserted = await ctx.db.get(docId);

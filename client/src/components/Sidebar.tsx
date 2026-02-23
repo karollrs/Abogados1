@@ -14,6 +14,7 @@ const adminAgentNavigation = [
   { name: "Call Logs", href: "/calls", icon: Phone },
   { name: "Attorneys", href: "/attorneys", icon: Gavel },
   { name: "Leads", href: "/leads", icon: UsersIcon },
+  { name: "New Lead / Manual", href: "/leads/new-manual", icon: UsersIcon },
 ];
 
 const abogadoNavigation = [

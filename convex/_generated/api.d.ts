@@ -11,6 +11,7 @@
 import type * as attorneys from "../attorneys.js";
 import type * as callLogs from "../callLogs.js";
 import type * as helpers from "../helpers.js";
+import type * as intakes from "../intakes.js";
 import type * as leads from "../leads.js";
 import type * as stats from "../stats.js";
 import type * as users from "../users.js";
@@ -25,6 +26,7 @@ declare const fullApi: ApiFromModules<{
   attorneys: typeof attorneys;
   callLogs: typeof callLogs;
   helpers: typeof helpers;
+  intakes: typeof intakes;
   leads: typeof leads;
   stats: typeof stats;
   users: typeof users;

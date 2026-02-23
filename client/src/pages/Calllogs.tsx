@@ -11,6 +11,9 @@ import { useLocation } from "wouter";
 import { US_CITIES } from "@/hooks/usCities";
 import { CASE_TYPES } from "@/hooks/caseTypes";
 
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+
 
 
 
@@ -176,40 +179,40 @@ function getCallCaseNotes(call: any): string {
 function getRecordingUrl(call: any): string {
   return String(
     call?.recordingUrl ??
-      call?.recording_url ??
-      call?.recording_url_public ??
-      call?.recording?.url ??
-      call?.recording?.recording_url ??
-      call?.recording?.recording_url_public ??
-      call?.recording?.public_url ??
-      call?.scrubbed_recording_url ??
-      call?.recording_multi_channel_url ??
-      call?.scrubbed_recording_multi_channel_url ??
-      call?.analysis?.recordingUrl ??
-      call?.analysis?.recording_url ??
-      call?.analysis?.recording_url_public ??
-      call?.analysis?.recording?.url ??
-      call?.analysis?.recording?.recording_url ??
-      call?.analysis?.recording?.recording_url_public ??
-      call?.analysis?.post_call_analysis?.recordingUrl ??
-      call?.analysis?.post_call_analysis?.recording_url ??
-      call?.analysis?.post_call_analysis?.recording_url_public ??
-      call?.analysis?.post_call_analysis?.recording?.url ??
-      call?.analysis?.scrubbed_recording_url ??
-      call?.analysis?.recording_multi_channel_url ??
-      call?.analysis?.scrubbed_recording_multi_channel_url ??
-      ""
+    call?.recording_url ??
+    call?.recording_url_public ??
+    call?.recording?.url ??
+    call?.recording?.recording_url ??
+    call?.recording?.recording_url_public ??
+    call?.recording?.public_url ??
+    call?.scrubbed_recording_url ??
+    call?.recording_multi_channel_url ??
+    call?.scrubbed_recording_multi_channel_url ??
+    call?.analysis?.recordingUrl ??
+    call?.analysis?.recording_url ??
+    call?.analysis?.recording_url_public ??
+    call?.analysis?.recording?.url ??
+    call?.analysis?.recording?.recording_url ??
+    call?.analysis?.recording?.recording_url_public ??
+    call?.analysis?.post_call_analysis?.recordingUrl ??
+    call?.analysis?.post_call_analysis?.recording_url ??
+    call?.analysis?.post_call_analysis?.recording_url_public ??
+    call?.analysis?.post_call_analysis?.recording?.url ??
+    call?.analysis?.scrubbed_recording_url ??
+    call?.analysis?.recording_multi_channel_url ??
+    call?.analysis?.scrubbed_recording_multi_channel_url ??
+    ""
   ).trim();
 }
 
 function getDisconnectionReason(call: any): string {
   return String(
     call?.analysis?.disconnection_reason ??
-      call?.analysis?.call_disconnection_reason ??
-      call?.analysis?.call?.disconnection_reason ??
-      call?.analysis?.post_call_analysis?.disconnection_reason ??
-      call?.analysis?.post_call_analysis?.call_disconnection_reason ??
-      ""
+    call?.analysis?.call_disconnection_reason ??
+    call?.analysis?.call?.disconnection_reason ??
+    call?.analysis?.post_call_analysis?.disconnection_reason ??
+    call?.analysis?.post_call_analysis?.call_disconnection_reason ??
+    ""
   ).trim();
 }
 
@@ -259,6 +262,101 @@ function isCompleteCall(call: any): boolean {
   if (successful === false) return false;
   if (!hasSummary || !hasTranscript) return false;
   return true;
+}
+
+type CallCardProps = {
+  call: any;
+  onView: () => void;
+  onAssign?: () => void;
+};
+
+function CallCard({ call, onView, onAssign }: CallCardProps) {
+  return (
+    <div className="group rounded-2xl border border-border/50 bg-card/60 p-5 shadow-sm hover:shadow-md hover:bg-card transition">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <span className="font-semibold truncate">
+              {call.leadName ?? "AI Lead"}
+            </span>
+            <StatusBadge status={call.status ?? "ended"} />
+          </div>
+        </div>
+
+        <div className="flex gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onView}
+            className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 transition"
+          >
+            Ver detalles
+          </button>
+
+          {onAssign && (
+            <button
+              type="button"
+              onClick={onAssign}
+              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm bg-primary text-primary-foreground hover:opacity-90 transition"
+            >
+              <Gavel className="h-4 w-4" />
+              Asignar abogado
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <Phone className="h-4 w-4 opacity-70" />
+          {call.phoneNumber ?? "Web Call"}
+        </span>
+
+        <span className="flex items-center gap-1">
+          <MapPin className="h-4 w-4 opacity-70" />
+          {getCallLocationLabel(call)}
+        </span>
+
+        <span className="flex items-center gap-1">
+          <Clock className="h-4 w-4 opacity-70" />
+          {formatDuration(call.duration)}
+        </span>
+
+        <span className="flex items-center gap-1">
+          <FileText className="h-4 w-4 opacity-70" />
+          {call.summary ? "Con resumen" : "Sin resumen"}
+        </span>
+      </div>
+
+      <div className="mt-3 text-sm text-foreground/80 leading-relaxed line-clamp-2 min-h-[2.75rem]">
+        {call.summary ?? "Sin resumen disponible para esta llamada."}
+      </div>
+    </div>
+  );
+}
+function Field({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-medium">{value || "—"}</div>
+    </div>
+  );
+}
+
+function BooleanField({ label, value }: { label: string; value: any }) {
+  const isTrue = value === true || value === "Yes";
+  return (
+    <div className="space-y-1">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <span
+        className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${isTrue
+          ? "bg-green-50 text-green-700"
+          : "bg-red-50 text-red-700"
+          }`}
+      >
+        {isTrue ? "Yes" : "No"}
+      </span>
+    </div>
+  );
 }
 
 export default function CallLogs() {
@@ -315,11 +413,16 @@ export default function CallLogs() {
     caseType: "",
     caseNotes: "",
   });
-
+  const [extraFields, setExtraFields] = useState<
+    { label: string; value: string }[]
+  >([]);
   // filtros
   const [cityText, setCityText] = useState("");
   const [caseTypeText, setCaseTypeText] = useState("");
   const [nameOrPhoneText, setNameOrPhoneText] = useState("");
+
+  const [isEditingBasic, setIsEditingBasic] = useState(false);
+  const [isEditingExtra, setIsEditingExtra] = useState(false);
 
 
 
@@ -331,6 +434,9 @@ export default function CallLogs() {
           .filter(Boolean)
           .join(" ")
       );
+
+
+
       const callCaseType = norm(getCallCaseType(call));
 
       const cityMatch = !cityText || callLocationText.includes(norm(cityText));
@@ -339,17 +445,17 @@ export default function CallLogs() {
       const queryDigits = searchQuery.replace(/\D/g, "");
       const callName = norm(
         call.leadName ??
-          call.analysis?.custom_analysis_data?.name ??
-          call.analysis?.post_call_data?.name ??
-          call.name
+        call.analysis?.custom_analysis_data?.name ??
+        call.analysis?.post_call_data?.name ??
+        call.name
       );
       const callPhoneRaw = String(
         call.phoneNumber ??
-          call.phone ??
-          call.from_number ??
-          call.analysis?.from_number ??
-          call.analysis?.post_call_data?.phone ??
-          ""
+        call.phone ??
+        call.from_number ??
+        call.analysis?.from_number ??
+        call.analysis?.post_call_data?.phone ??
+        ""
       );
       const callPhoneNorm = callPhoneRaw.replace(/\D/g, "");
       const nameMatch = !searchQuery || callName.includes(searchQuery);
@@ -365,57 +471,74 @@ export default function CallLogs() {
   }, [logs, cityText, caseTypeText, nameOrPhoneText]);
 
   // PAGINACION
-const ITEMS_PER_PAGE = 7;
-const [completePage, setCompletePage] = useState(1);
-const [incompletePage, setIncompletePage] = useState(1);
+  const ITEMS_PER_PAGE = 7;
+  const [completePage, setCompletePage] = useState(1);
+  const [incompletePage, setIncompletePage] = useState(1);
 
-// Resetear paginas cuando cambien filtros o datos
-useEffect(() => {
-  setCompletePage(1);
-  setIncompletePage(1);
-}, [cityText, caseTypeText, nameOrPhoneText, logs]);
+  // Resetear paginas cuando cambien filtros o datos
+  useEffect(() => {
+    setCompletePage(1);
+    setIncompletePage(1);
+  }, [cityText, caseTypeText, nameOrPhoneText, logs]);
 
-const { completeLogsAll, incompleteLogsAll } = useMemo(() => {
-  const sortedLogs = [...filteredLogs].sort(
-    (a: any, b: any) => getCallCreatedAtMs(b) - getCallCreatedAtMs(a)
+  const { completeLogsAll, incompleteLogsAll, manualLogsAll } = useMemo(() => {
+    const sortedLogs = [...filteredLogs].sort(
+      (a: any, b: any) => getCallCreatedAtMs(b) - getCallCreatedAtMs(a)
+    );
+
+    const complete: any[] = [];
+    const incomplete: any[] = [];
+    const manual: any[] = [];
+
+    for (const call of sortedLogs) {
+      const retellId = String(call.retellCallId ?? "");
+      const isManual = retellId.startsWith("manual-");
+
+      if (isManual) {
+        manual.push(call);
+        continue;
+      }
+
+      if (isCompleteCall(call)) {
+        complete.push(call);
+      } else {
+        incomplete.push(call);
+      }
+    }
+
+    return {
+      completeLogsAll: complete,
+      incompleteLogsAll: incomplete,
+      manualLogsAll: manual,
+    };
+  }, [filteredLogs]);
+
+  const completeTotalPages = Math.max(
+    1,
+    Math.ceil(completeLogsAll.length / ITEMS_PER_PAGE)
   );
-  const complete: any[] = [];
-  const incomplete: any[] = [];
+  const incompleteTotalPages = Math.max(
+    1,
+    Math.ceil(incompleteLogsAll.length / ITEMS_PER_PAGE)
+  );
 
-  for (const call of sortedLogs) {
-    if (isCompleteCall(call)) complete.push(call);
-    else incomplete.push(call);
-  }
+  useEffect(() => {
+    setCompletePage((p) => Math.min(p, completeTotalPages));
+  }, [completeTotalPages]);
 
-  return { completeLogsAll: complete, incompleteLogsAll: incomplete };
-}, [filteredLogs]);
+  useEffect(() => {
+    setIncompletePage((p) => Math.min(p, incompleteTotalPages));
+  }, [incompleteTotalPages]);
 
-const completeTotalPages = Math.max(
-  1,
-  Math.ceil(completeLogsAll.length / ITEMS_PER_PAGE)
-);
-const incompleteTotalPages = Math.max(
-  1,
-  Math.ceil(incompleteLogsAll.length / ITEMS_PER_PAGE)
-);
+  const completeLogs = useMemo(() => {
+    const start = (completePage - 1) * ITEMS_PER_PAGE;
+    return completeLogsAll.slice(start, start + ITEMS_PER_PAGE);
+  }, [completeLogsAll, completePage]);
 
-useEffect(() => {
-  setCompletePage((p) => Math.min(p, completeTotalPages));
-}, [completeTotalPages]);
-
-useEffect(() => {
-  setIncompletePage((p) => Math.min(p, incompleteTotalPages));
-}, [incompleteTotalPages]);
-
-const completeLogs = useMemo(() => {
-  const start = (completePage - 1) * ITEMS_PER_PAGE;
-  return completeLogsAll.slice(start, start + ITEMS_PER_PAGE);
-}, [completeLogsAll, completePage]);
-
-const incompleteLogs = useMemo(() => {
-  const start = (incompletePage - 1) * ITEMS_PER_PAGE;
-  return incompleteLogsAll.slice(start, start + ITEMS_PER_PAGE);
-}, [incompleteLogsAll, incompletePage]);
+  const incompleteLogs = useMemo(() => {
+    const start = (incompletePage - 1) * ITEMS_PER_PAGE;
+    return incompleteLogsAll.slice(start, start + ITEMS_PER_PAGE);
+  }, [incompleteLogsAll, incompletePage]);
 
 
   // âœ… Auto-open por phone
@@ -481,6 +604,16 @@ const incompleteLogs = useMemo(() => {
 
   const getLeadIdFromSelected = (s: any) => s?.leadId ?? s?.lead_id ?? s?.lead?.id ?? s?.id;
   const selectedLeadId = selected ? getLeadIdFromSelected(selected) : null;
+  const isManual = selected?.retellCallId?.startsWith("manual-");
+  const intake = useQuery(
+    api.intakes.getByLeadAndPractice,
+    selectedLeadId && isManual
+      ? {
+        leadId: selectedLeadId,
+        practiceArea: "Personal Injury",
+      }
+      : "skip"
+  );
   const selectedRetellCallId = String(
     selected?.retellCallId ?? selected?.call_id ?? selected?.callId ?? ""
   );
@@ -496,6 +629,7 @@ const incompleteLogs = useMemo(() => {
       caseType: getCallCaseType(selected),
       caseNotes: getCallCaseNotes(selected),
     });
+    setExtraFields(selected?.extraFields ?? []);
   }, [selected]);
 
   const attorneyScores = useMemo(() => {
@@ -579,6 +713,7 @@ const incompleteLogs = useMemo(() => {
         location: caseDetails.location.trim(),
         caseType: caseDetails.caseType.trim(),
         caseNotes: caseDetails.caseNotes.trim(),
+        extraFields,
       };
 
       const response = await fetch(
@@ -599,6 +734,7 @@ const incompleteLogs = useMemo(() => {
       setSavingCaseDetails(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -685,7 +821,7 @@ const incompleteLogs = useMemo(() => {
             </CardHeader>
 
             <CardContent className="pt-0">
-              {isLoading && <div className="text-muted-foreground">Cargandoâ€¦</div>}
+              {isLoading && <div className="text-muted-foreground">Cargando…</div>}
 
               {error && (
                 <div className="text-destructive">
@@ -699,7 +835,10 @@ const incompleteLogs = useMemo(() => {
                 </div>
               )}
 
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-8">
+                {/* ========================= */}
+                {/* 1️⃣ LLAMADAS COMPLETAS */}
+                {/* ========================= */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-green-700 dark:text-green-300">
@@ -717,120 +856,26 @@ const incompleteLogs = useMemo(() => {
                   )}
 
                   {completeLogs.map((l: any) => (
-                    <div
+                    <CallCard
                       key={l.id}
-                      className="group rounded-2xl border border-border/50 bg-card/60 p-5 shadow-sm hover:shadow-md hover:bg-card transition"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-3">
-                            <span className="font-semibold truncate">{l.leadName ?? "AI Lead"}</span>
-                            <StatusBadge status={l.status ?? "ended"} />
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelected(l);
-                              setOpen(true);
-                            }}
-                            className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 transition"
-                          >
-                            Ver detalles ⬅️
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelected(l);
-                              setAssignOpen(true);
-                            }}
-                            className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm bg-primary text-primary-foreground hover:opacity-90 transition"
-                          >
-                            <Gavel className="h-4 w-4" />
-                            Asignar abogado
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Phone className="h-4 w-4 opacity-70" />
-                          {l.phoneNumber ?? "Web Call"}
-                        </span>
-
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-4 w-4 opacity-70" />
-                          {getCallLocationLabel(l)}
-                        </span>
-
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-4 w-4 opacity-70" />
-                          {formatDuration(l.duration)}
-                        </span>
-
-                        <span className="flex items-center gap-1">
-                          <FileText className="h-4 w-4 opacity-70" />
-                          {l.summary ? "Con resumen" : "Sin resumen"}
-                        </span>
-                      </div>
-
-                      <div className="mt-3 text-sm text-foreground/80 leading-relaxed line-clamp-2 min-h-[2.75rem]">
-                        {l.summary ?? "Sin resumen disponible para esta llamada."}
-                      </div>
-                    </div>
+                      call={l}
+                      onView={() => {
+                        setSelected(l);
+                        setOpen(true);
+                      }}
+                      onAssign={() => {
+                        setSelected(l);
+                        setAssignOpen(true);
+                      }}
+                    />
                   ))}
-
-                  {completeLogsAll.length > 0 && completeTotalPages > 1 && (
-                    <div className="flex items-center justify-between gap-3 px-4 py-4 border-t border-border bg-muted/20 mt-4 rounded-xl">
-                      <div className="text-xs text-muted-foreground">
-                        Mostrando{" "}
-                        <span className="font-medium text-foreground">
-                          {(completePage - 1) * ITEMS_PER_PAGE + 1}
-                        </span>
-                        {"-"}
-                        <span className="font-medium text-foreground">
-                          {Math.min(completePage * ITEMS_PER_PAGE, completeLogsAll.length)}
-                        </span>{" "}
-                        de{" "}
-                        <span className="font-medium text-foreground">
-                          {completeLogsAll.length}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCompletePage((p) => Math.max(p - 1, 1))}
-                          disabled={completePage === 1}
-                          className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted transition disabled:opacity-40"
-                        >
-                          {"<"}
-                        </button>
-
-                        <span className="min-w-[40px] text-center px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/10 text-primary font-semibold text-sm">
-                          {completePage}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCompletePage((p) => Math.min(p + 1, completeTotalPages))
-                          }
-                          disabled={completePage === completeTotalPages}
-                          className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted transition disabled:opacity-40"
-                        >
-                          {">"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 <Separator />
 
+                {/* ========================= */}
+                {/* 2️⃣ LLAMADAS INCOMPLETAS */}
+                {/* ========================= */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">
@@ -848,116 +893,56 @@ const incompleteLogs = useMemo(() => {
                   )}
 
                   {incompleteLogs.map((l: any) => (
-                    <div
+                    <CallCard
                       key={l.id}
-                      className="group rounded-2xl border border-border/50 bg-card/60 p-5 shadow-sm hover:shadow-md hover:bg-card transition"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-3">
-                            <span className="font-semibold truncate">{l.leadName ?? "AI Lead"}</span>
-                            <StatusBadge status={l.status ?? "ended"} />
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelected(l);
-                              setOpen(true);
-                            }}
-                            className="inline-flex items-center rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 transition"
-                          >
-                            Ver detalles ⬅️
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelected(l);
-                              setAssignOpen(true);
-                            }}
-                            className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm bg-primary text-primary-foreground hover:opacity-90 transition"
-                          >
-                            <Gavel className="h-4 w-4" />
-                            Asignar abogado
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Phone className="h-4 w-4 opacity-70" />
-                          {l.phoneNumber ?? "Web Call"}
-                        </span>
-
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-4 w-4 opacity-70" />
-                          {getCallLocationLabel(l)}
-                        </span>
-
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-4 w-4 opacity-70" />
-                          {formatDuration(l.duration)}
-                        </span>
-
-                        <span className="flex items-center gap-1">
-                          <FileText className="h-4 w-4 opacity-70" />
-                          {l.summary ? "Con resumen" : "Sin resumen"}
-                        </span>
-                      </div>
-
-                      <div className="mt-3 text-sm text-foreground/80 leading-relaxed line-clamp-2 min-h-[2.75rem]">
-                        {l.summary ?? "Sin resumen disponible para esta llamada."}
-                      </div>
-                    </div>
+                      call={l}
+                      onView={() => {
+                        setSelected(l);
+                        setOpen(true);
+                      }}
+                      onAssign={() => {
+                        setSelected(l);
+                        setAssignOpen(true);
+                      }}
+                    />
                   ))}
+                </div>
 
-                  {incompleteLogsAll.length > 0 && incompleteTotalPages > 1 && (
-                    <div className="flex items-center justify-between gap-3 px-4 py-4 border-t border-border bg-muted/20 mt-4 rounded-xl">
-                      <div className="text-xs text-muted-foreground">
-                        Mostrando{" "}
-                        <span className="font-medium text-foreground">
-                          {(incompletePage - 1) * ITEMS_PER_PAGE + 1}
-                        </span>
-                        {"-"}
-                        <span className="font-medium text-foreground">
-                          {Math.min(incompletePage * ITEMS_PER_PAGE, incompleteLogsAll.length)}
-                        </span>{" "}
-                        de{" "}
-                        <span className="font-medium text-foreground">
-                          {incompleteLogsAll.length}
-                        </span>
-                      </div>
+                <Separator />
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setIncompletePage((p) => Math.max(p - 1, 1))}
-                          disabled={incompletePage === 1}
-                          className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted transition disabled:opacity-40"
-                        >
-                          {"<"}
-                        </button>
+                {/* ========================= */}
+                {/* 3️⃣ CASOS MANUALES */}
+                {/* ========================= */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                      Casos manuales
+                    </h3>
+                    <span className="inline-flex min-w-9 items-center justify-center rounded-full bg-muted px-3 py-1 text-lg font-bold text-foreground">
+                      {manualLogsAll.length}
+                    </span>
+                  </div>
 
-                        <span className="min-w-[40px] text-center px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/10 text-primary font-semibold text-sm">
-                          {incompletePage}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setIncompletePage((p) => Math.min(p + 1, incompleteTotalPages))
-                          }
-                          disabled={incompletePage === incompleteTotalPages}
-                          className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted transition disabled:opacity-40"
-                        >
-                          {">"}
-                        </button>
-                      </div>
+                  {manualLogsAll.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+                      No hay casos manuales.
                     </div>
                   )}
+
+                  {manualLogsAll.map((l: any) => (
+                    <CallCard
+                      key={l.id}
+                      call={l}
+                      onView={() => {
+                        setSelected(l);
+                        setOpen(true);
+                      }}
+                      onAssign={() => {
+                        setSelected(l);
+                        setAssignOpen(true);
+                      }}
+                    />
+                  ))}
                 </div>
               </div>
             </CardContent>
@@ -1025,10 +1010,76 @@ const incompleteLogs = useMemo(() => {
               )}
             </div>
 
+
             <div className="flex-1 overflow-y-auto px-6 py-4">
               {!selected ? (
-                <div className="text-muted-foreground">Selecciona una llamada.</div>
+                <div className="text-muted-foreground">
+                  Selecciona una llamada.
+                </div>
+              ) : isManual ? (
+                <Card className="rounded-2xl border-border/60 shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      Formulario del caso manual
+                    </CardTitle>
+                  </CardHeader>
+
+                  <CardContent className="space-y-3 text-sm">
+
+                    {!intake && (
+                      <div className="text-muted-foreground">
+                        Cargando información del formulario...
+                      </div>
+                    )}
+
+                    {intake && (
+                      <div className="space-y-6">
+
+                        {/* INFORMACIÓN DEL CLIENTE */}
+                        <div className="rounded-xl border border-border/60 p-4 bg-muted/20">
+                          <div className="text-sm font-semibold mb-3">
+                            Información del cliente
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <Field label="Nombre" value={intake.data?.name} />
+                            <Field label="Teléfono" value={intake.data?.phone} />
+                          </div>
+                        </div>
+
+                        {/* DETALLES DEL CASO */}
+                        <div className="rounded-xl border border-border/60 p-4 bg-muted/20">
+                          <div className="text-sm font-semibold mb-3">
+                            Detalles del caso
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <Field label="Incident Date" value={intake.data?.incidentDate} />
+                            <Field label="Injuries Brief" value={intake.data?.injuriesBrief} />
+                            <BooleanField label="Medical Treatment" value={intake.data?.medicalTreatment} />
+                            <BooleanField label="Police Report" value={intake.data?.policeReport} />
+                          </div>
+                        </div>
+
+                        {/* NARRATIVA */}
+                        <div className="rounded-xl border border-border/60 p-4 bg-muted/20">
+                          <div className="text-sm font-semibold mb-3">
+                            Narrativa
+                          </div>
+
+                          <div className="text-sm whitespace-pre-wrap">
+                            {intake.data?.narrative || "—"}
+                          </div>
+                        </div>
+
+                      </div>
+                    )}
+
+
+                  </CardContent>
+                </Card>
               ) : (
+
                 <Tabs defaultValue="resumen" className="w-full">
                   <TabsList className="grid w-full grid-cols-4 rounded-xl">
                     <TabsTrigger value="resumen" className="rounded-lg">
@@ -1096,6 +1147,7 @@ const incompleteLogs = useMemo(() => {
 
                       <CardContent className="space-y-4">
                         <Separator />
+
                         <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                           <div className="space-y-3 text-sm">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1121,122 +1173,176 @@ const incompleteLogs = useMemo(() => {
                               </div>
                             </div>
 
-                            <div className="rounded-2xl border border-border/60 bg-background p-4 space-y-4">
-                              <div className="text-sm font-semibold">Datos editables del caso</div>
+                            <div className="rounded-2xl border border-border/60 bg-background p-4 space-y-6">
 
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <label className="text-xs text-muted-foreground">Correo</label>
-                                  <input
-                                    type="email"
-                                    value={caseDetails.email}
-                                    onChange={(e) =>
-                                      setCaseDetails((prev) => ({ ...prev, email: e.target.value }))
-                                    }
-                                    placeholder="cliente@email.com"
-                                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
-                                  />
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm font-semibold">
+                                  Datos básicos del caso
                                 </div>
 
-                                <div className="space-y-1">
-                                  <label className="text-xs text-muted-foreground">Direccion</label>
-                                  <input
-                                    type="text"
-                                    value={caseDetails.address}
-                                    onChange={(e) =>
-                                      setCaseDetails((prev) => ({ ...prev, address: e.target.value }))
-                                    }
-                                    placeholder="123 Main St"
-                                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
-                                  />
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="text-xs text-muted-foreground">Ciudad</label>
-                                  <input
-                                    type="text"
-                                    value={caseDetails.city}
-                                    onChange={(e) =>
-                                      setCaseDetails((prev) => ({ ...prev, city: e.target.value }))
-                                    }
-                                    placeholder="Linden"
-                                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
-                                  />
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="text-xs text-muted-foreground">Estado</label>
-                                  <input
-                                    type="text"
-                                    value={caseDetails.stateProvince}
-                                    onChange={(e) =>
-                                      setCaseDetails((prev) => ({
-                                        ...prev,
-                                        stateProvince: e.target.value,
-                                      }))
-                                    }
-                                    placeholder="New Jersey"
-                                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
-                                  />
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="text-xs text-muted-foreground">Ubicacion</label>
-                                  <input
-                                    type="text"
-                                    value={caseDetails.location}
-                                    onChange={(e) =>
-                                      setCaseDetails((prev) => ({ ...prev, location: e.target.value }))
-                                    }
-                                    placeholder="Linden, New Jersey"
-                                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
-                                  />
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="text-xs text-muted-foreground">Tipo de caso</label>
-                                  <input
-                                    type="text"
-                                    value={caseDetails.caseType}
-                                    onChange={(e) =>
-                                      setCaseDetails((prev) => ({ ...prev, caseType: e.target.value }))
-                                    }
-                                    placeholder="Deportacion"
-                                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
-                                  />
-                                </div>
+                                {!isEditingBasic ? (
+                                  <button
+                                    onClick={() => setIsEditingBasic(true)}
+                                    className="text-xs bg-primary text-white px-3 py-1.5 rounded-lg"
+                                  >
+                                    Editar
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={async () => {
+                                      await saveCaseDetails();
+                                      setIsEditingBasic(false);
+                                    }}
+                                    className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg"
+                                  >
+                                    Guardar
+                                  </button>
+                                )}
                               </div>
 
-                              <div className="space-y-1">
-                                <label className="text-xs text-muted-foreground">
-                                  Notas importantes del caso
-                                </label>
-                                <textarea
-                                  value={caseDetails.caseNotes}
-                                  onChange={(e) =>
-                                    setCaseDetails((prev) => ({
-                                      ...prev,
-                                      caseNotes: e.target.value,
-                                    }))
-                                  }
-                                  placeholder="Datos importantes para seguimiento..."
-                                  className="w-full rounded-md border border-border px-3 py-2 text-sm min-h-[88px]"
-                                />
-                              </div>
+                              {!isEditingBasic ? (
+                                <div className="space-y-3 text-sm">
+                                  <Field label="Correo" value={caseDetails.email} />
+                                  <Field label="Dirección" value={caseDetails.address} />
+                                  <Field label="Notas importantes" value={caseDetails.caseNotes} />
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                              <div className="flex justify-end">
-                                <button
-                                  type="button"
-                                  onClick={saveCaseDetails}
-                                  disabled={savingCaseDetails || !selectedRetellCallId}
-                                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                                >
-                                  <Save className="h-4 w-4" />
-                                  {savingCaseDetails ? "Guardando..." : "Guardar datos"}
-                                </button>
-                              </div>
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-muted-foreground">
+                                        Correo
+                                      </label>
+                                      <input
+                                        type="email"
+                                        value={caseDetails.email}
+                                        onChange={(e) =>
+                                          setCaseDetails((prev) => ({ ...prev, email: e.target.value }))
+                                        }
+                                        className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                                        placeholder="cliente@email.com"
+                                      />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <label className="text-xs text-muted-foreground">
+                                        Dirección
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={caseDetails.address}
+                                        onChange={(e) =>
+                                          setCaseDetails((prev) => ({ ...prev, address: e.target.value }))
+                                        }
+                                        className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                                        placeholder="123 Main St"
+                                      />
+                                    </div>
+
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-xs text-muted-foreground">
+                                      Notas importantes del caso
+                                    </label>
+                                    <textarea
+                                      value={caseDetails.caseNotes}
+                                      onChange={(e) =>
+                                        setCaseDetails((prev) => ({
+                                          ...prev,
+                                          caseNotes: e.target.value,
+                                        }))
+                                      }
+                                      className="w-full rounded-md border border-border px-3 py-2 text-sm min-h-[100px]"
+                                      placeholder="Detalles importantes para seguimiento..."
+                                    />
+                                  </div>
+                                </>
+                              )}
+
                             </div>
                           </div>
+                        </div>
+                        <div className="rounded-2xl border border-dashed border-border/70 p-4 space-y-4">
+
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold">
+                              Información adicional
+                            </div>
+
+                            {!isEditingExtra ? (
+                              <button
+                                onClick={() => setIsEditingExtra(true)}
+                                className="text-xs bg-primary text-white px-3 py-1.5 rounded-lg"
+                              >
+                                Editar
+                              </button>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  await saveCaseDetails();
+                                  setIsEditingExtra(false);
+                                }}
+                                className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg"
+                              >
+                                Guardar
+                              </button>
+                            )}
+                          </div>
+
+                          {!isEditingExtra ? (
+                            <div className="space-y-3 text-sm">
+                              {extraFields.length === 0 && (
+                                <div className="text-muted-foreground">
+                                  No hay información adicional.
+                                </div>
+                              )}
+
+                              {extraFields.map((field, index) => (
+                                <Field key={index} label={field.label} value={field.value} />
+                              ))}
+                            </div>
+                          ) : (
+                            <>
+                              {extraFields.map((field, index) => (
+                                <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <input
+                                    type="text"
+                                    value={field.label}
+                                    onChange={(e) => {
+                                      const copy = [...extraFields];
+                                      copy[index].label = e.target.value;
+                                      setExtraFields(copy);
+                                    }}
+                                    className="rounded-md border border-border px-3 py-2 text-sm"
+                                  />
+
+                                  <input
+                                    type="text"
+                                    value={field.value}
+                                    onChange={(e) => {
+                                      const copy = [...extraFields];
+                                      copy[index].value = e.target.value;
+                                      setExtraFields(copy);
+                                    }}
+                                    className="rounded-md border border-border px-3 py-2 text-sm"
+                                  />
+                                </div>
+                              ))}
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExtraFields((prev) => [...prev, { label: "", value: "" }])
+                                }
+                                className="text-xs bg-muted px-3 py-1.5 rounded-lg hover:bg-muted/70"
+                              >
+                                + Agregar campo
+                              </button>
+                            </>
+                          )}
+
                         </div>
                       </CardContent>
                     </Card>
@@ -1452,5 +1558,7 @@ const incompleteLogs = useMemo(() => {
         </DialogContent>
       </Dialog>
     </div>
+
   );
+
 }
