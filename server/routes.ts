@@ -4,8 +4,8 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { requireAuth, requireAdmin } from "./auth";
 import bcrypt from "bcryptjs";
-import { randomUUID } from "node:crypto";
-import { sendAttorneyAssignmentEmail } from "./mailer";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { sendAttorneyAssignmentEmail, sendAttorneyDecisionEmail } from "./mailer";
 import { openrouter } from "./services/ai";
 import { convexClient } from "./convexClient";
 
@@ -153,12 +153,91 @@ function normalizeEmail(v: any): string {
   return safeString(v).toLowerCase().trim();
 }
 
+type EmailDecision = "accept" | "reject";
+
+function getEmailDecisionSecret(): string {
+  return (
+    safeString(process.env.EMAIL_DECISION_SECRET).trim() ||
+    safeString(process.env.SESSION_SECRET).trim()
+  );
+}
+
+function getEmailDecisionTtlMs(): number {
+  const raw = Number(process.env.EMAIL_DECISION_TTL_MS ?? "");
+  if (Number.isFinite(raw) && raw > 0) return raw;
+  return 1000 * 60 * 60 * 72;
+}
+
+function signEmailDecisionToken(input: {
+  callId: string;
+  attorneyId: string;
+  decision: EmailDecision;
+  exp: number;
+}): string {
+  const secret = getEmailDecisionSecret();
+  if (!secret) throw new Error("EMAIL_DECISION_SECRET no esta configurado");
+  const payload = `${input.callId}|${input.attorneyId}|${input.decision}|${input.exp}`;
+  return createHmac("sha256", secret).update(payload).digest("hex");
+}
+
+function verifyEmailDecisionToken(input: {
+  callId: string;
+  attorneyId: string;
+  decision: EmailDecision;
+  exp: number;
+  sig: string;
+}): boolean {
+  const expected = signEmailDecisionToken({
+    callId: input.callId,
+    attorneyId: input.attorneyId,
+    decision: input.decision,
+    exp: input.exp,
+  });
+  try {
+    return timingSafeEqual(Buffer.from(expected), Buffer.from(input.sig));
+  } catch {
+    return false;
+  }
+}
+
+function renderEmailDecisionResult(
+  res: any,
+  opts: { title: string; message: string; ok?: boolean; statusCode?: number }
+) {
+  const { title, message, ok = false, statusCode = 200 } = opts;
+  const bg = ok ? "#ecfdf5" : "#fef2f2";
+  const border = ok ? "#bbf7d0" : "#fecaca";
+  const text = ok ? "#166534" : "#991b1b";
+  return res.status(statusCode).type("html").send(`
+    <!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>${title}</title>
+      </head>
+      <body style="margin:0;padding:24px;font-family:Arial,sans-serif;background:#f9fafb;">
+        <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;">
+          <h2 style="margin:0 0 12px 0;">${title}</h2>
+          <div style="background:${bg};border:1px solid ${border};color:${text};padding:12px;border-radius:10px;">
+            ${message}
+          </div>
+          <p style="margin-top:14px;color:#6b7280;font-size:13px;">Puedes cerrar esta ventana.</p>
+        </div>
+      </body>
+    </html>
+  `);
+}
+
 function callLogMatchesAttorney(log: any, attorneyId: string): boolean {
   const cleanAttorneyId = safeString(attorneyId).trim();
   if (!cleanAttorneyId) return false;
+  const status = safeString((log as any)?.status).toLowerCase();
+  const assignmentStatus = safeString((log as any)?.assignmentStatus).toLowerCase();
   const assignedAttorneyId = safeString(log?.attorneyId).trim();
-  const pendingAttorneyId = safeString((log as any)?.pendingAttorneyId).trim();
-  return assignedAttorneyId === cleanAttorneyId || pendingAttorneyId === cleanAttorneyId;
+  if (status !== "asignada") return false;
+  if (assignmentStatus !== "delivered") return false;
+  return assignedAttorneyId === cleanAttorneyId;
 }
 
 function computeDashboardStatsFromLeads(leads: any[]) {
@@ -234,6 +313,7 @@ export async function registerRoutes(
     if (!req.path.startsWith("/api")) return next();
     if (req.method === "OPTIONS") return next();
     if (req.path.startsWith("/api/auth")) return next();
+    if (req.path.startsWith("/api/attorney/email-decision")) return next();
 
     const cleanPath = req.path.replace(/\/+$/, "");
     const retellPath = api.webhooks.retell.path.replace(/\/+$/, "");
@@ -523,6 +603,126 @@ ${JSON.stringify(callsData, null, 2)}
     }
   });
 
+  app.post("/api/call-logs/:retellCallId/send-to-attorney", async (req: any, res) => {
+    try {
+      const role = normalizeUserRole(req.user?.role) ?? "agent";
+      if (role === "abogado") {
+        return res.status(403).json({ message: "No autorizado" });
+      }
+
+      const retellCallId = safeString(req.params.retellCallId).trim();
+      if (!retellCallId) {
+        return res.status(400).json({ message: "retellCallId es obligatorio" });
+      }
+
+      const call = await storage.getCallLogByRetellCallId(retellCallId);
+      if (!call) {
+        return res.status(404).json({ message: "Call log no encontrado" });
+      }
+
+      const status = safeString((call as any)?.status).toLowerCase();
+      if (status !== "asignada") {
+        return res.status(400).json({
+          message: "Solo se puede enviar al abogado cuando el caso ya fue aceptado",
+        });
+      }
+      const assignmentStatus = safeString((call as any)?.assignmentStatus).toLowerCase();
+      if (assignmentStatus === "delivered") {
+        return res.json({
+          success: true,
+          alreadySent: true,
+          to: normalizeEmail((call as any)?.attorneyEmail ?? ""),
+          retellCallId,
+        });
+      }
+      if (assignmentStatus !== "accepted") {
+        return res.status(400).json({
+          message: "El abogado aun no ha aceptado el caso por correo",
+        });
+      }
+
+      const leadId = Number((call as any)?.leadId ?? 0);
+      const lead =
+        Number.isFinite(leadId) && leadId > 0
+          ? await storage.getLead(leadId)
+          : undefined;
+      const attorneyId =
+        pickFirstString(
+          (call as any)?.attorneyId,
+          (lead as any)?.attorneyId,
+          (call as any)?.pendingAttorneyId
+        ) ?? "";
+      if (!attorneyId) {
+        return res.status(400).json({ message: "No hay abogado asignado en este caso" });
+      }
+
+      const attorney = await storage.getAttorney(attorneyId);
+      const to = normalizeEmail((attorney as any)?.email);
+      if (!to) {
+        return res.status(400).json({ message: "El abogado no tiene correo configurado" });
+      }
+
+      const leadName =
+        pickFirstString(
+          (lead as any)?.name,
+          (call as any)?.leadName,
+          (call as any)?.analysis?.custom_analysis_data?.name
+        ) ?? "Lead";
+      const leadPhone =
+        pickFirstString(
+          (call as any)?.phoneNumber,
+          (lead as any)?.phone,
+          (call as any)?.leadPhone
+        ) ?? "N/A";
+      const caseType =
+        pickFirstString(
+          (call as any)?.caseType,
+          (lead as any)?.caseType
+        ) ?? "General";
+      const urgency =
+        pickFirstString(
+          (call as any)?.urgency,
+          (lead as any)?.urgency
+        ) ?? "Medium";
+      const summary =
+        pickFirstString(
+          (call as any)?.summary,
+          (call as any)?.analysis?.call_summary,
+          (call as any)?.analysis?.post_call_analysis?.call_summary,
+          (lead as any)?.summary
+        ) ?? "Sin resumen";
+      const notes =
+        pickFirstString(
+          safeString(req.body?.notes).trim(),
+          safeString((call as any)?.assignmentNotes).trim()
+        ) ?? undefined;
+
+      await sendAttorneyAssignmentEmail({
+        to,
+        leadName,
+        leadPhone,
+        caseType,
+        urgency,
+        summary,
+        notes,
+      });
+      await storage.updateCallLogByRetellCallId(retellCallId, {
+        assignmentStatus: "delivered",
+      } as any);
+
+      return res.json({
+        success: true,
+        to,
+        attorneyId,
+        retellCallId,
+      });
+    } catch (err: any) {
+      return res
+        .status(500)
+        .json({ message: err?.message ?? "Failed to send case to attorney" });
+    }
+  });
+
   /* ================= LEADS ================= */
 
   app.get(api.leads.list.path, async (req, res) => {
@@ -577,23 +777,21 @@ ${JSON.stringify(callsData, null, 2)}
 
   app.post("/api/leads/:id/assign-attorney", async (req, res) => {
     try {
-      const leadId = Number(req.params.id);
+      const rawLeadId = Number(req.params.id);
+      const leadId = Number.isFinite(rawLeadId) && rawLeadId > 0 ? rawLeadId : null;
       const attorneyId = safeString(req.body?.attorneyId).trim();
       const retellCallId = safeString(req.body?.retellCallId).trim();
       const assignmentNotes = safeString(req.body?.assignmentNotes).trim();
-      if (!Number.isFinite(leadId)) {
+      if (!Number.isFinite(rawLeadId)) {
         return res.status(400).json({ message: "leadId invalido" });
       }
       if (!attorneyId) {
         return res.status(400).json({ message: "attorneyId es obligatorio" });
       }
-      const [lead, attorney] = await Promise.all([
-        storage.getLead(leadId),
+      const [leadById, attorney] = await Promise.all([
+        leadId ? storage.getLead(leadId) : Promise.resolve(undefined),
         storage.getAttorney(attorneyId),
       ]);
-      if (!lead) {
-        return res.status(404).json({ message: "Lead no encontrado" });
-      }
       if (!attorney) {
         return res.status(404).json({ message: "Abogado no encontrado" });
       }
@@ -603,27 +801,75 @@ ${JSON.stringify(callsData, null, 2)}
           ? logs.find(
               (l: any) =>
                 String(l?.retellCallId ?? "") === retellCallId &&
-                Number(l?.leadId ?? 0) === leadId
+                (!leadId || Number(l?.leadId ?? 0) === leadId)
             )
           : null) ??
-        logs
-          .filter((l: any) => Number(l?.leadId) === leadId)
-          .sort(
-            (a: any, b: any) => toTimeMs(b?.createdAt) - toTimeMs(a?.createdAt)
-          )[0] ??
+        (leadId
+          ? logs
+              .filter((l: any) => Number(l?.leadId) === leadId)
+              .sort(
+                (a: any, b: any) => toTimeMs(b?.createdAt) - toTimeMs(a?.createdAt)
+              )[0]
+          : null) ??
         null;
       if (!targetLog?.retellCallId) {
         return res.status(404).json({
           message: "No encontre call log para este lead",
         });
       }
-      const updatedLead = await storage.updateLead(leadId, {
+      const effectiveLead =
+        leadById ??
+        (await storage.createLead({
+          retellCallId: String(targetLog.retellCallId),
+          name:
+            pickFirstString(
+              (targetLog as any)?.leadName,
+              (targetLog as any)?.analysis?.custom_analysis_data?.name
+            ) ?? "Lead",
+          phone:
+            pickFirstString(
+              (targetLog as any)?.phoneNumber,
+              (targetLog as any)?.phone,
+              (targetLog as any)?.from_number,
+              (targetLog as any)?.analysis?.from_number,
+              (targetLog as any)?.analysis?.post_call_data?.phone
+            ) ?? "Unknown",
+          caseType:
+            pickFirstString(
+              (targetLog as any)?.caseType,
+              (targetLog as any)?.analysis?.case_type,
+              (targetLog as any)?.analysis?.post_call_data?.case_type
+            ) ?? "General",
+          urgency:
+            pickFirstString(
+              (targetLog as any)?.urgency,
+              (targetLog as any)?.analysis?.custom_analysis_data?.urgency
+            ) ?? "Medium",
+          summary:
+            pickFirstString(
+              (targetLog as any)?.summary,
+              (targetLog as any)?.analysis?.call_summary,
+              (targetLog as any)?.analysis?.post_call_analysis?.call_summary
+            ) ?? undefined,
+          transcript:
+            pickFirstString(
+              (targetLog as any)?.transcript,
+              (targetLog as any)?.analysis?.transcript
+            ) ?? undefined,
+          status: "pendiente",
+        } as any));
+      const effectiveLeadId = Number((effectiveLead as any)?.id ?? 0);
+      if (!Number.isFinite(effectiveLeadId) || effectiveLeadId <= 0) {
+        return res.status(400).json({ message: "No se pudo resolver lead para asignar" });
+      }
+
+      const updatedLead = await storage.updateLead(effectiveLeadId, {
         status: "en_espera_aceptacion",
       } as any);
       const assignedCall = await storage.updateCallLogByRetellCallId(
         String(targetLog.retellCallId),
         {
-          leadId,
+          leadId: effectiveLeadId,
           status: "pendiente_aprobacion_abogado",
           pendingAttorneyId: attorneyId,
           assignmentStatus: "pending",
@@ -633,23 +879,75 @@ ${JSON.stringify(callsData, null, 2)}
       );
       const appBaseUrl =
         process.env.APP_URL?.trim() || `${req.protocol}://${req.get("host")}`;
-      const assignedCallUrl = assignedCall?.retellCallId
-        ? `${appBaseUrl}/attorney-call?callId=${encodeURIComponent(
-            String(assignedCall.retellCallId)
-          )}`
-        : `${appBaseUrl}/attorney-call`;
+      const callIdForEmail = String(assignedCall?.retellCallId ?? "");
+      const emailDecisionExp = Date.now() + getEmailDecisionTtlMs();
+      const acceptSig = signEmailDecisionToken({
+        callId: callIdForEmail,
+        attorneyId,
+        decision: "accept",
+        exp: emailDecisionExp,
+      });
+      const rejectSig = signEmailDecisionToken({
+        callId: callIdForEmail,
+        attorneyId,
+        decision: "reject",
+        exp: emailDecisionExp,
+      });
+      const acceptUrl = `${appBaseUrl}/api/attorney/email-decision?callId=${encodeURIComponent(
+        callIdForEmail
+      )}&attorneyId=${encodeURIComponent(attorneyId)}&decision=accept&exp=${emailDecisionExp}&sig=${encodeURIComponent(
+        acceptSig
+      )}`;
+      const rejectUrl = `${appBaseUrl}/api/attorney/email-decision?callId=${encodeURIComponent(
+        callIdForEmail
+      )}&attorneyId=${encodeURIComponent(attorneyId)}&decision=reject&exp=${emailDecisionExp}&sig=${encodeURIComponent(
+        rejectSig
+      )}`;
+      const summary =
+        pickFirstString(
+          (assignedCall as any)?.summary,
+          (targetLog as any)?.summary,
+          (targetLog as any)?.analysis?.call_summary,
+          (targetLog as any)?.analysis?.post_call_analysis?.call_summary,
+          (updatedLead as any)?.summary
+        ) ?? "Sin resumen";
+      const leadName =
+        pickFirstString(
+          (updatedLead as any)?.name,
+          (targetLog as any)?.leadName,
+          (targetLog as any)?.analysis?.custom_analysis_data?.name
+        ) ?? "Lead";
+      const leadPhone =
+        pickFirstString(
+          (assignedCall as any)?.phoneNumber,
+          (targetLog as any)?.phoneNumber,
+          (updatedLead as any)?.phone
+        ) ?? "N/A";
+      const caseType =
+        pickFirstString(
+          (assignedCall as any)?.caseType,
+          (targetLog as any)?.caseType,
+          (updatedLead as any)?.caseType
+        ) ?? "General";
+      const urgency =
+        pickFirstString(
+          (assignedCall as any)?.urgency,
+          (targetLog as any)?.urgency,
+          (updatedLead as any)?.urgency
+        ) ?? "Medium";
       let mailSent = false;
       let mailError: string | null = null;
       try {
         await sendAttorneyAssignmentEmail({
           to: String((attorney as any).email ?? ""),
-          attorneyName: String((attorney as any).name ?? "Abogado"),
-          leadName: String((updatedLead as any).name ?? "Lead"),
-          leadPhone: String((updatedLead as any).phone ?? "N/A"),
-          caseType: ((updatedLead as any).caseType ?? null) as string | null,
-          urgency: ((updatedLead as any).urgency ?? null) as string | null,
+          leadName,
+          leadPhone,
+          caseType,
+          urgency,
+          summary,
           notes: assignmentNotes || undefined,
-          callUrl: assignedCallUrl,
+          acceptUrl,
+          rejectUrl,
         });
         mailSent = true;
       } catch (err: any) {
@@ -661,14 +959,17 @@ ${JSON.stringify(callsData, null, 2)}
         lead: updatedLead,
         attorney,
         call: assignedCall,
-        assignedCallUrl,
+        assignedCallUrl: `${appBaseUrl}/attorney-call?callId=${encodeURIComponent(
+          String(assignedCall?.retellCallId ?? "")
+        )}`,
         assignmentPayload: {
           attorneyName: String((attorney as any).name ?? "Abogado"),
           attorneyEmail: String((attorney as any).email ?? ""),
-          leadName: String((updatedLead as any).name ?? "Lead"),
-          leadPhone: String((updatedLead as any).phone ?? "N/A"),
-          caseType: ((updatedLead as any).caseType ?? null) as string | null,
-          urgency: ((updatedLead as any).urgency ?? null) as string | null,
+          leadName,
+          leadPhone,
+          caseType,
+          urgency,
+          summary,
           notes: assignmentNotes || null,
         },
         mailSent,
@@ -680,6 +981,167 @@ ${JSON.stringify(callsData, null, 2)}
         .json({ message: err?.message ?? "Failed to assign attorney" });
     }
   });
+
+  const notifyDecisionInbox = async (params: {
+    decision: EmailDecision;
+    attorneyId?: string | null;
+    leadId?: number | null;
+    notes?: string | null;
+  }) => {
+    try {
+      const attorneyId = safeString(params.attorneyId).trim();
+      const leadId = Number(params.leadId ?? 0);
+      const [attorney, lead] = await Promise.all([
+        attorneyId ? storage.getAttorney(attorneyId) : Promise.resolve(undefined),
+        Number.isFinite(leadId) && leadId > 0
+          ? storage.getLead(leadId)
+          : Promise.resolve(undefined),
+      ]);
+
+      await sendAttorneyDecisionEmail({
+        decision: params.decision,
+        attorneyName: safeString((attorney as any)?.name) || null,
+        attorneyEmail: safeString((attorney as any)?.email) || null,
+        leadName: safeString((lead as any)?.name) || null,
+        leadPhone: safeString((lead as any)?.phone) || null,
+        caseType: safeString((lead as any)?.caseType) || null,
+        notes: safeString(params.notes) || null,
+      });
+    } catch (err) {
+      console.error("Decision inbox mail error:", err);
+    }
+  };
+
+  app.get("/api/attorney/email-decision", async (req: any, res) => {
+    try {
+      const callId = safeString(req.query?.callId).trim();
+      const attorneyId = safeString(req.query?.attorneyId).trim();
+      const decision = safeString(req.query?.decision).trim().toLowerCase();
+      const sig = safeString(req.query?.sig).trim();
+      const exp = Number(req.query?.exp ?? 0);
+
+      if (!callId || !attorneyId || !sig || !Number.isFinite(exp)) {
+        return renderEmailDecisionResult(res, {
+          title: "Solicitud invalida",
+          message: "Faltan parametros para procesar la decision.",
+          statusCode: 400,
+        });
+      }
+      if (decision !== "accept" && decision !== "reject") {
+        return renderEmailDecisionResult(res, {
+          title: "Solicitud invalida",
+          message: "La decision no es valida.",
+          statusCode: 400,
+        });
+      }
+      if (Date.now() > exp) {
+        return renderEmailDecisionResult(res, {
+          title: "Enlace expirado",
+          message: "Este enlace ya vencio. Solicita una nueva asignacion.",
+          statusCode: 410,
+        });
+      }
+      if (
+        !verifyEmailDecisionToken({
+          callId,
+          attorneyId,
+          decision,
+          exp,
+          sig,
+        })
+      ) {
+        return renderEmailDecisionResult(res, {
+          title: "Solicitud no valida",
+          message: "La firma del enlace no es valida.",
+          statusCode: 401,
+        });
+      }
+
+      const call = await storage.getCallLogByRetellCallId(callId);
+      if (!call) {
+        return renderEmailDecisionResult(res, {
+          title: "Llamada no encontrada",
+          message: "No se encontro la llamada asociada a este enlace.",
+          statusCode: 404,
+        });
+      }
+
+      const currentStatus = safeString((call as any)?.status).toLowerCase();
+      if (currentStatus === "asignada" || currentStatus === "rechazada_por_abogado") {
+        return renderEmailDecisionResult(res, {
+          title: "Decision ya procesada",
+          message: "Este caso ya fue procesado previamente.",
+          ok: true,
+        });
+      }
+
+      const pendingAttorneyId = safeString((call as any)?.pendingAttorneyId).trim();
+      if (pendingAttorneyId && pendingAttorneyId !== attorneyId) {
+        return renderEmailDecisionResult(res, {
+          title: "No autorizado",
+          message: "Este enlace ya no corresponde al abogado actual.",
+          statusCode: 403,
+        });
+      }
+
+      const leadId = Number((call as any)?.leadId ?? 0);
+      if (!Number.isFinite(leadId) || leadId <= 0) {
+        return renderEmailDecisionResult(res, {
+          title: "Lead no valido",
+          message: "La llamada no tiene lead valido para actualizar.",
+          statusCode: 400,
+        });
+      }
+
+      if (decision === "accept") {
+        await storage.assignAttorneyToLead(leadId, attorneyId);
+        await storage.updateLead(leadId, { status: "asignada" } as any);
+        await storage.updateCallLogByRetellCallId(callId, {
+          status: "asignada",
+          pendingAttorneyId: attorneyId,
+          assignmentStatus: "accepted",
+          assignmentDecisionAt: Date.now(),
+          assignmentDecisionByAttorneyId: attorneyId,
+        } as any);
+        await notifyDecisionInbox({
+          decision: "accept",
+          attorneyId,
+          leadId,
+        });
+        return renderEmailDecisionResult(res, {
+          title: "Caso aceptado",
+          message: "Tu decision fue registrada: ACEPTADA por abogado.",
+          ok: true,
+        });
+      }
+
+      await storage.updateLead(leadId, { status: "pendiente" } as any);
+      await storage.updateCallLogByRetellCallId(callId, {
+        status: "rechazada_por_abogado",
+        assignmentStatus: "rejected",
+        assignmentDecisionAt: Date.now(),
+        assignmentDecisionByAttorneyId: attorneyId,
+      } as any);
+      await notifyDecisionInbox({
+        decision: "reject",
+        attorneyId,
+        leadId,
+      });
+      return renderEmailDecisionResult(res, {
+        title: "Caso rechazado",
+        message: "Tu decision fue registrada: RECHAZADA. El caso queda para reasignar.",
+        ok: true,
+      });
+    } catch (err: any) {
+      console.error("Email decision error:", err);
+      return renderEmailDecisionResult(res, {
+        title: "Error",
+        message: err?.message ?? "No se pudo procesar la decision.",
+        statusCode: 500,
+      });
+    }
+  });
+
   app.post("/api/attorney/call-decision", async (req: any, res) => {
     try {
       const retellCallId = safeString(req.body?.retellCallId).trim();
@@ -731,6 +1193,12 @@ ${JSON.stringify(callsData, null, 2)}
           assignmentDecisionByAttorneyId: effectiveAttorneyId,
           assignmentDecisionNotes: notes || undefined,
         } as any);
+        await notifyDecisionInbox({
+          decision: "accept",
+          attorneyId: effectiveAttorneyId,
+          leadId,
+          notes: notes || null,
+        });
         return res.json({ success: true, call: updated });
       }
       const rejectedLeadId = Number((call as any).leadId ?? 0);
@@ -744,6 +1212,12 @@ ${JSON.stringify(callsData, null, 2)}
         assignmentDecisionByAttorneyId: actingAttorneyId || undefined,
         assignmentDecisionNotes: notes || undefined,
       } as any);
+      await notifyDecisionInbox({
+        decision: "reject",
+        attorneyId: actingAttorneyId || safeString((call as any).pendingAttorneyId).trim(),
+        leadId: rejectedLeadId,
+        notes: notes || null,
+      });
       return res.json({ success: true, call: updated });
     } catch (err: any) {
       return res
@@ -761,14 +1235,36 @@ ${JSON.stringify(callsData, null, 2)}
       const state = req.query.state as string | undefined;
       const specialty = req.query.specialty as string | undefined;
 
-      const attorneys = await storage.getAttorneys({
-        q,
-        city,
-        state,
-        specialty,
-      });
+      const [attorneys, logs] = await Promise.all([
+        storage.getAttorneys({
+          q,
+          city,
+          state,
+          specialty,
+        }),
+        storage.getCallLogs(),
+      ]);
 
-      return res.json(attorneys);
+      const assignedCountByAttorneyId = new Map<string, number>();
+      for (const log of logs) {
+        const status = safeString((log as any)?.status).toLowerCase();
+        const assignmentStatus = safeString((log as any)?.assignmentStatus).toLowerCase();
+        const attorneyId = safeString((log as any)?.attorneyId).trim();
+        if (!attorneyId) continue;
+        if (status !== "asignada" || assignmentStatus !== "delivered") continue;
+        assignedCountByAttorneyId.set(
+          attorneyId,
+          (assignedCountByAttorneyId.get(attorneyId) ?? 0) + 1
+        );
+      }
+
+      return res.json(
+        attorneys.map((attorney: any) => ({
+          ...attorney,
+          assignedCasesCount:
+            assignedCountByAttorneyId.get(safeString((attorney as any)?.id).trim()) ?? 0,
+        }))
+      );
     } catch (err: any) {
       return res
         .status(500)
@@ -879,25 +1375,15 @@ ${JSON.stringify(callsData, null, 2)}
         .filter((l: any) => {
           const logStatus = String(l?.status ?? "").toLowerCase();
           const logAttorneyId = String(l?.attorneyId ?? "");
-          const pendingAttorneyId = String(
-            (l as any)?.pendingAttorneyId ?? ""
-          );
-          const assignmentStatus = String(
-            (l as any)?.assignmentStatus ?? ""
-          ).toLowerCase();
-
-          const isPendingForAttorney =
-            logStatus === "pendiente_aprobacion_abogado" &&
-            assignmentStatus !== "rejected" &&
-            !!pendingAttorneyId &&
-            (!attorneyId || pendingAttorneyId === attorneyId);
+          const assignmentStatus = String((l as any)?.assignmentStatus ?? "").toLowerCase();
 
           const isAssignedForAttorney =
             logStatus === "asignada" &&
+            assignmentStatus === "delivered" &&
             !!logAttorneyId &&
             (!attorneyId || logAttorneyId === attorneyId);
 
-          if (!isPendingForAttorney && !isAssignedForAttorney) return false;
+          if (!isAssignedForAttorney) return false;
 
           if (!callId) return true;
           const rid = String(
@@ -908,6 +1394,7 @@ ${JSON.stringify(callsData, null, 2)}
         .sort((a: any, b: any) => toTimeMs(b?.createdAt) - toTimeMs(a?.createdAt));
 
       return res.json({
+        calls: assignedLogs,
         call: assignedLogs[0] ?? null,
         attorneyId: attorneyId || null,
       });

@@ -152,6 +152,8 @@ export default defineSchema({
     assignmentDecisionAt: v.optional(v.number()),
     assignmentDecisionByAttorneyId: v.optional(v.string()),
     assignmentDecisionNotes: v.optional(v.string()),
+    assignmentDeliveredAt: v.optional(v.number()),
+    assignmentDeliveredByUserId: v.optional(v.string()),
 
     createdAt: v.number(),
   })

@@ -9,6 +9,7 @@ export type Attorney = {
   stateProvince?: string | null;
   notes?: string | null;
   specialties: string[];
+  assignedCasesCount?: number;
   createdAt: string;
 };
 

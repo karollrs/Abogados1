@@ -239,6 +239,9 @@ export class ConvexStorage implements IStorage {
           (log as any).assignmentDecisionByAttorneyId ?? undefined,
         assignmentDecisionNotes:
           (log as any).assignmentDecisionNotes ?? undefined,
+        assignmentDeliveredAt: (log as any).assignmentDeliveredAt ?? undefined,
+        assignmentDeliveredByUserId:
+          (log as any).assignmentDeliveredByUserId ?? undefined,
       },
     });
     return { ...created, createdAt: created.createdAt ? new Date(created.createdAt) : null } as any;

@@ -3,7 +3,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { useCallLogs } from "@/hooks/use-call-logs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Phone, Clock, FileText, Copy, Gavel, MapPin, Save } from "lucide-react";
+import { Phone, Clock, Copy, Gavel, MapPin, Send } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
@@ -59,7 +59,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-950/30 dark:text-green-300">
         <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-        Asignada
+        Aceptada por abogado
       </span>
     );
   }
@@ -68,7 +68,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-950/30 dark:text-red-300">
         <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-        Rechazada por abogado
+        Reasignar
       </span>
     );
   }
@@ -176,6 +176,17 @@ function getCallCaseNotes(call: any): string {
   );
 }
 
+function getCallPhoneNumber(call: any): string {
+  return firstText(
+    call?.phoneNumber,
+    call?.phone,
+    call?.from_number,
+    call?.analysis?.from_number,
+    call?.analysis?.post_call_data?.phone,
+    call?.analysis?.custom_analysis_data?.phone
+  );
+}
+
 function getRecordingUrl(call: any): string {
   return String(
     call?.recordingUrl ??
@@ -228,6 +239,16 @@ function getCallCreatedAtMs(call: any): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getRetellCallId(call: any): string {
+  return firstText(call?.retellCallId, call?.call_id, call?.callId);
+}
+
+function isReadyToSendToAttorney(call: any): boolean {
+  const status = String(call?.status ?? "").toLowerCase();
+  const assignmentStatus = String(call?.assignmentStatus ?? "").toLowerCase();
+  return status === "asignada" && assignmentStatus === "accepted";
+}
+
 function isCompleteCall(call: any): boolean {
   const summary =
     call?.summary ??
@@ -268,9 +289,17 @@ type CallCardProps = {
   call: any;
   onView: () => void;
   onAssign?: () => void;
+  onSendToAttorney?: () => void;
+  sendingToAttorney?: boolean;
 };
 
-function CallCard({ call, onView, onAssign }: CallCardProps) {
+function CallCard({
+  call,
+  onView,
+  onAssign,
+  onSendToAttorney,
+  sendingToAttorney,
+}: CallCardProps) {
   return (
     <div className="group rounded-2xl border border-border/50 bg-card/60 p-5 shadow-sm hover:shadow-md hover:bg-card transition">
       <div className="flex items-start justify-between gap-4">
@@ -292,7 +321,17 @@ function CallCard({ call, onView, onAssign }: CallCardProps) {
             Ver detalles
           </button>
 
-          {onAssign && (
+          {onSendToAttorney ? (
+            <button
+              type="button"
+              disabled={!!sendingToAttorney}
+              onClick={onSendToAttorney}
+              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm bg-primary text-primary-foreground hover:opacity-90 transition"
+            >
+              <Send className="h-4 w-4" />
+              {sendingToAttorney ? "Enviando..." : "Enviar a abogado"}
+            </button>
+          ) : onAssign ? (
             <button
               type="button"
               onClick={onAssign}
@@ -301,14 +340,14 @@ function CallCard({ call, onView, onAssign }: CallCardProps) {
               <Gavel className="h-4 w-4" />
               Asignar abogado
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
         <span className="flex items-center gap-1">
           <Phone className="h-4 w-4 opacity-70" />
-          {call.phoneNumber ?? "Web Call"}
+          {getCallPhoneNumber(call) || "Sin numero"}
         </span>
 
         <span className="flex items-center gap-1">
@@ -321,10 +360,6 @@ function CallCard({ call, onView, onAssign }: CallCardProps) {
           {formatDuration(call.duration)}
         </span>
 
-        <span className="flex items-center gap-1">
-          <FileText className="h-4 w-4 opacity-70" />
-          {call.summary ? "Con resumen" : "Sin resumen"}
-        </span>
       </div>
 
       <div className="mt-3 text-sm text-foreground/80 leading-relaxed line-clamp-2 min-h-[2.75rem]">
@@ -397,6 +432,7 @@ export default function CallLogs() {
   // modal asignar abogado
   const [assignOpen, setAssignOpen] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [sendingToAttorneyCallId, setSendingToAttorneyCallId] = useState<string | null>(null);
   const [attorneys, setAttorneys] = useState<any[]>([]);
   const [attorneysLoading, setAttorneysLoading] = useState(false);
   const [attorneysError, setAttorneysError] = useState<string | null>(null);
@@ -602,7 +638,10 @@ export default function CallLogs() {
     })();
   }, [assignOpen]);
 
-  const getLeadIdFromSelected = (s: any) => s?.leadId ?? s?.lead_id ?? s?.lead?.id ?? s?.id;
+  const getLeadIdFromSelected = (s: any) => {
+    const id = Number(s?.leadId ?? s?.lead_id ?? s?.lead?.id ?? 0);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  };
   const selectedLeadId = selected ? getLeadIdFromSelected(selected) : null;
   const isManual = selected?.retellCallId?.startsWith("manual-");
   const intake = useQuery(
@@ -617,6 +656,7 @@ export default function CallLogs() {
   const selectedRetellCallId = String(
     selected?.retellCallId ?? selected?.call_id ?? selected?.callId ?? ""
   );
+  const canAssignSelected = Boolean(selectedLeadId || selectedRetellCallId);
 
   useEffect(() => {
     if (!selected) return;
@@ -693,13 +733,40 @@ export default function CallLogs() {
       attorneyName: String(attorneyToAssign?.name ?? "Abogado"),
       attorneyEmail: String(attorneyToAssign?.email ?? "sin correo"),
       leadName: String(selected?.leadName ?? "Lead"),
-      leadPhone: String(selected?.phoneNumber ?? "N/A"),
+      leadPhone: String(getCallPhoneNumber(selected) || "N/A"),
       location: getCallLocationLabel(selected),
       caseType: String(getCallCaseType(selected) || "General"),
       urgency: String(selected?.urgency ?? "Media"),
       summary: String(selected?.summary ?? "Sin resumen"),
     };
   }, [selected, attorneyToAssign]);
+
+  const sendToAcceptedAttorney = async (call: any) => {
+    const retellCallId = getRetellCallId(call);
+    if (!retellCallId) {
+      alert("No se encontro callId para este caso.");
+      return;
+    }
+    try {
+      setSendingToAttorneyCallId(retellCallId);
+      const r = await fetch(
+        `/api/call-logs/${encodeURIComponent(retellCallId)}/send-to-attorney`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+      if (!r.ok) throw new Error(await r.text());
+      const data = await r.json();
+      alert(`Caso enviado al abogado: ${String(data?.to ?? "sin correo")}`);
+      await refetchCallLogs();
+    } catch (e: any) {
+      alert(e?.message ?? "No se pudo enviar el caso al abogado");
+    } finally {
+      setSendingToAttorneyCallId(null);
+    }
+  };
 
   const saveCaseDetails = async () => {
     if (!selectedRetellCallId) return;
@@ -863,10 +930,22 @@ export default function CallLogs() {
                         setSelected(l);
                         setOpen(true);
                       }}
-                      onAssign={() => {
-                        setSelected(l);
-                        setAssignOpen(true);
-                      }}
+                      onAssign={
+                        String(l?.status ?? "").toLowerCase() === "asignada"
+                          ? undefined
+                          : () => {
+                              setSelected(l);
+                              setAssignOpen(true);
+                            }
+                      }
+                      onSendToAttorney={
+                        isReadyToSendToAttorney(l)
+                          ? () => void sendToAcceptedAttorney(l)
+                          : undefined
+                      }
+                      sendingToAttorney={
+                        String(sendingToAttorneyCallId ?? "") === getRetellCallId(l)
+                      }
                     />
                   ))}
                 </div>
@@ -900,10 +979,22 @@ export default function CallLogs() {
                         setSelected(l);
                         setOpen(true);
                       }}
-                      onAssign={() => {
-                        setSelected(l);
-                        setAssignOpen(true);
-                      }}
+                      onAssign={
+                        String(l?.status ?? "").toLowerCase() === "asignada"
+                          ? undefined
+                          : () => {
+                              setSelected(l);
+                              setAssignOpen(true);
+                            }
+                      }
+                      onSendToAttorney={
+                        isReadyToSendToAttorney(l)
+                          ? () => void sendToAcceptedAttorney(l)
+                          : undefined
+                      }
+                      sendingToAttorney={
+                        String(sendingToAttorneyCallId ?? "") === getRetellCallId(l)
+                      }
                     />
                   ))}
                 </div>
@@ -937,10 +1028,22 @@ export default function CallLogs() {
                         setSelected(l);
                         setOpen(true);
                       }}
-                      onAssign={() => {
-                        setSelected(l);
-                        setAssignOpen(true);
-                      }}
+                      onAssign={
+                        String(l?.status ?? "").toLowerCase() === "asignada"
+                          ? undefined
+                          : () => {
+                              setSelected(l);
+                              setAssignOpen(true);
+                            }
+                      }
+                      onSendToAttorney={
+                        isReadyToSendToAttorney(l)
+                          ? () => void sendToAcceptedAttorney(l)
+                          : undefined
+                      }
+                      sendingToAttorney={
+                        String(sendingToAttorneyCallId ?? "") === getRetellCallId(l)
+                      }
                     />
                   ))}
                 </div>
@@ -1389,15 +1492,17 @@ export default function CallLogs() {
             <DialogTitle>Asignar abogado</DialogTitle>
           </DialogHeader>
 
-          {!selectedLeadId ? (
+          {!canAssignSelected ? (
             <div className="text-sm text-destructive">
-              No pude detectar el leadId de esta llamada. Revisa que tu backend estÃ© retornando leadId en /api/call-logs.
+              No pude detectar callId o leadId de esta llamada para asignar abogado.
             </div>
           ) : (
             <>
-              <div className="text-sm text-muted-foreground">
-                Lead ID: <span className="text-foreground font-medium">{String(selectedLeadId)}</span>
-              </div>
+              {selectedLeadId ? (
+                <div className="text-sm text-muted-foreground">
+                  Lead ID: <span className="text-foreground font-medium">{String(selectedLeadId)}</span>
+                </div>
+              ) : null}
 
               {attorneysLoading && <div className="text-muted-foreground">Cargando abogadosâ€¦</div>}
               {attorneysError && <div className="text-destructive">Error: {attorneysError}</div>}
@@ -1522,11 +1627,12 @@ export default function CallLogs() {
 
                 <button
                   type="button"
-                  disabled={assigning || !selectedLeadId || !attorneyToAssign}
+                  disabled={assigning || !canAssignSelected || !attorneyToAssign}
                   onClick={async () => {
                     try {
                       setAssigning(true);
-                      const r = await fetch(`/api/leads/${selectedLeadId}/assign-attorney`, {
+                      const leadIdForAssign = selectedLeadId ?? 0;
+                      const r = await fetch(`/api/leads/${leadIdForAssign}/assign-attorney`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({

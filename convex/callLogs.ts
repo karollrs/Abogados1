@@ -136,6 +136,20 @@ export const upsertByRetellCallId = mutation({
     updates: v.any(),
   },
   handler: async (ctx, { retellCallId, updates }) => {
+    const normalizedUpdates: any = { ...(updates ?? {}) };
+    if (
+      normalizedUpdates.summary !== undefined &&
+      typeof normalizedUpdates.summary !== "string"
+    ) {
+      delete normalizedUpdates.summary;
+    }
+    if (
+      normalizedUpdates.extraFields !== undefined &&
+      !Array.isArray(normalizedUpdates.extraFields)
+    ) {
+      delete normalizedUpdates.extraFields;
+    }
+
     // 1️⃣ Buscar existente
     const existing = await ctx.db
       .query("callLogs")
@@ -147,24 +161,39 @@ export const upsertByRetellCallId = mutation({
     // 2️⃣ Si existe → patch
     if (existing) {
       const summaryFromAnalysis =
-        updates?.analysis?.call_summary ??
-        updates?.analysis?.post_call_analysis?.call_summary ??
-        null;
+        normalizedUpdates?.analysis?.call_summary ??
+        normalizedUpdates?.analysis?.post_call_analysis?.call_summary;
+      const safeSummary =
+        normalizedUpdates.summary ??
+        (typeof summaryFromAnalysis === "string" ? summaryFromAnalysis : undefined) ??
+        (typeof existing.summary === "string" ? existing.summary : undefined);
+      const safeExtraFields = Array.isArray(normalizedUpdates.extraFields)
+        ? normalizedUpdates.extraFields
+        : Array.isArray((existing as any).extraFields)
+          ? (existing as any).extraFields
+          : [];
+      const patch: any = {
+        ...normalizedUpdates,
+        extraFields: safeExtraFields,
+      };
+      if (typeof safeSummary === "string") {
+        patch.summary = safeSummary;
+      } else if (
+        (existing as any).summary !== undefined &&
+        typeof (existing as any).summary !== "string"
+      ) {
+        // Auto-heal legacy invalid docs that stored summary as null/non-string.
+        patch.summary = "";
+      } else {
+        delete patch.summary;
+      }
 
-      await ctx.db.patch(existing._id, {
-        ...updates,
-        summary:
-          updates.summary ??
-          summaryFromAnalysis ??
-          existing.summary ??
-          null,
-          extraFields: updates.extraFields ?? existing.extraFields ?? [],
-      });
+      await ctx.db.patch(existing._id, patch);
 
       const updated = await ctx.db.get(existing._id);
 
       // 🔁 Sincronizar lead si cambió status
-      if (updated?.leadId && updates?.status) {
+      if (updated?.leadId && normalizedUpdates?.status) {
         const lead = await ctx.db
           .query("leads")
           .filter((q) => q.eq(q.field("id"), updated.leadId))
@@ -172,7 +201,7 @@ export const upsertByRetellCallId = mutation({
 
         if (lead) {
           await ctx.db.patch(lead._id, {
-            status: updates.status,
+            status: normalizedUpdates.status,
           });
         }
       }
@@ -186,32 +215,34 @@ export const upsertByRetellCallId = mutation({
       const now = Date.now();
 
       const summaryFromAnalysis =
-        updates?.analysis?.call_summary ??
-        updates?.analysis?.post_call_analysis?.call_summary ??
-        null;
+        normalizedUpdates?.analysis?.call_summary ??
+        normalizedUpdates?.analysis?.post_call_analysis?.call_summary;
+      const safeSummary =
+        normalizedUpdates.summary ??
+        (typeof summaryFromAnalysis === "string" ? summaryFromAnalysis : undefined);
 
       const docId = await ctx.db.insert("callLogs", {
         id: newId,
         retellCallId,
         status: "pendiente",
         createdAt: now,
-        ...updates,
-        summary: updates.summary ?? summaryFromAnalysis ?? null,
-        extraFields: updates.extraFields ?? [],
+        ...normalizedUpdates,
+        ...(typeof safeSummary === "string" ? { summary: safeSummary } : {}),
+        extraFields: normalizedUpdates.extraFields ?? [],
       });
 
       const inserted = await ctx.db.get(docId);
 
       // 🔁 Sincronizar lead
-      if (updates?.leadId != null) {
+      if (normalizedUpdates?.leadId != null) {
         const lead = await ctx.db
           .query("leads")
-          .filter((q) => q.eq(q.field("id"), updates.leadId))
+          .filter((q) => q.eq(q.field("id"), normalizedUpdates.leadId))
           .unique();
 
         if (lead) {
           await ctx.db.patch(lead._id, {
-            status: updates.status ?? "pendiente",
+            status: normalizedUpdates.status ?? "pendiente",
           });
         }
       }

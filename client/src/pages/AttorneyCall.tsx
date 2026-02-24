@@ -42,23 +42,18 @@ function getRecordingUrl(call: any): string {
   ).trim();
 }
 
+function getCallKey(call: any): string {
+  return String(call?.retellCallId ?? call?.call_id ?? call?.callId ?? call?.id ?? "");
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
   const s = (status ?? "pendiente").toLowerCase();
-
-  if (s === "pendiente_aprobacion_abogado") {
-    return (
-      <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700 dark:bg-orange-950/30 dark:text-orange-300">
-        <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
-        Pendiente por tu aprobacion
-      </span>
-    );
-  }
 
   if (s === "asignada") {
     return (
       <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-950/30 dark:text-green-300">
         <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-        Asignada
+        Aceptada por abogado
       </span>
     );
   }
@@ -67,16 +62,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-950/30 dark:text-red-300">
         <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-        Rechazada
-      </span>
-    );
-  }
-
-  if (s === "en_espera_aceptacion") {
-    return (
-      <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
-        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-        En espera de aceptaciÃ³n
+        Reasignar
       </span>
     );
   }
@@ -90,45 +76,21 @@ function StatusBadge({ status }: { status?: string | null }) {
 }
 
 export default function AttorneyCall() {
-  const [copied, setCopied] = useState(false);
-  const [decisionNotes, setDecisionNotes] = useState("");
-  const [deciding, setDeciding] = useState<"accept" | "reject" | null>(null);
-  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [copiedCallKey, setCopiedCallKey] = useState<string | null>(null);
   const callId = useMemo(
     () => new URLSearchParams(window.location.search).get("callId") ?? undefined,
     []
   );
 
   const { data, isLoading, error, refetch } = useAssignedAttorneyCall(callId);
-  const call = data?.call ?? null;
-
-  async function submitDecision(decision: "accept" | "reject") {
-    if (!call?.retellCallId) return;
-    try {
-      setDecisionError(null);
-      setDeciding(decision);
-
-      const r = await fetch("/api/attorney/call-decision", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          retellCallId: call.retellCallId,
-          decision,
-          notes: decisionNotes || undefined,
-        }),
-      });
-
-      if (!r.ok) throw new Error(await r.text());
-
-      setDecisionNotes("");
-      await refetch();
-    } catch (e: any) {
-      setDecisionError(e?.message ?? "No se pudo procesar la decision");
-    } finally {
-      setDeciding(null);
-    }
-  }
+  const calls = useMemo(() => {
+    const rows = Array.isArray(data?.calls)
+      ? data.calls
+      : data?.call
+      ? [data.call]
+      : [];
+    return rows.filter(Boolean);
+  }, [data]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -138,9 +100,9 @@ export default function AttorneyCall() {
         <div className="p-8 space-y-6">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
-              <h1 className="text-3xl font-bold tracking-tight">Casos asignada</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Mis casos</h1>
               <p className="text-muted-foreground">
-                Vista completa de los casos que te fueron asignados
+                Aqui aparecen todos los casos enviados por admin o agente
               </p>
             </div>
 
@@ -153,7 +115,7 @@ export default function AttorneyCall() {
             </button>
           </div>
 
-          {isLoading && <div className="text-muted-foreground">Cargando llamadaâ€¦</div>}
+          {isLoading && <div className="text-muted-foreground">Cargando casos...</div>}
 
           {error && (
             <div className="text-destructive">
@@ -161,200 +123,163 @@ export default function AttorneyCall() {
             </div>
           )}
 
-          {!isLoading && !error && !call && (
+          {!isLoading && !error && calls.length === 0 && (
             <Card className="border-border/60 shadow-sm">
               <CardContent className="py-8 text-muted-foreground">
-                No tienes casos asignados por ahora.
+                No tienes casos enviados por ahora.
               </CardContent>
             </Card>
           )}
 
-          {!isLoading && !error && call && (
-            <Card className="border-border/60 shadow-sm">
-              <CardHeader className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <CardTitle className="text-xl">Detalle del caso</CardTitle>
-                  <StatusBadge status={call.status} />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {call.leadName ?? "AI Lead"}
-                  </span>
-
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-4 w-4 opacity-60" />
-                    {formatDuration(call.duration)}
-                  </span>
-
-                  {call.phoneNumber && (
-                    <span className="flex items-center gap-1">
-                      <Phone className="h-4 w-4 opacity-60" />
-                      {call.phoneNumber}
-                    </span>
-                  )}
-
-                  <span className="flex items-center gap-1">
-                    <FileText className="h-4 w-4 opacity-60" />
-                    {call.summary ? "Con resumen" : "Sin resumen"}
-                  </span>
-                </div>
-              </CardHeader>
-
-              <CardContent>
-                {String(call.status ?? "").toLowerCase() === "pendiente_aprobacion_abogado" ? (
-                  <div className="mb-4 rounded-2xl border border-orange-200 bg-orange-50/60 p-4 space-y-3">
-                    <div className="text-sm font-medium text-orange-800">
-                      Este caso esta pendiente por tu aprobacion.
+          {!isLoading &&
+            !error &&
+            calls.map((call: any, idx: number) => {
+              const callKey = getCallKey(call);
+              const copied = copiedCallKey === callKey;
+              return (
+                <Card key={callKey || String(call?.id ?? idx)} className="border-border/60 shadow-sm">
+                  <CardHeader className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <CardTitle className="text-xl">Detalle del caso</CardTitle>
+                      <StatusBadge status={call.status} />
                     </div>
-                    <div className="text-sm text-orange-900/80">
-                      Nota enviada por el equipo:{" "}
-                      <span className="font-medium">
-                        {(call as any).assignmentNotes || "Sin notas adicionales"}
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {call.leadName ?? "AI Lead"}
+                      </span>
+
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-4 w-4 opacity-60" />
+                        {formatDuration(call.duration)}
+                      </span>
+
+                      {call.phoneNumber && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-4 w-4 opacity-60" />
+                          {call.phoneNumber}
+                        </span>
+                      )}
+
+                      <span className="flex items-center gap-1">
+                        <FileText className="h-4 w-4 opacity-60" />
+                        {call.summary ? "Con resumen" : "Sin resumen"}
                       </span>
                     </div>
-                    <textarea
-                      value={decisionNotes}
-                      onChange={(e) => setDecisionNotes(e.target.value)}
-                      placeholder="Opcional: agrega una nota al aceptar o rechazar..."
-                      className="w-full rounded-md border border-orange-200 bg-white px-3 py-2 text-sm min-h-[88px]"
-                    />
+                  </CardHeader>
 
-                    {decisionError ? (
-                      <div className="text-sm text-red-600">{decisionError}</div>
-                    ) : null}
+                  <CardContent>
+                    <Tabs defaultValue="resumen" className="w-full">
+                      <TabsList className="grid w-full grid-cols-4 rounded-xl">
+                        <TabsTrigger value="resumen" className="rounded-lg">
+                          Resumen
+                        </TabsTrigger>
+                        <TabsTrigger value="transcripcion" className="rounded-lg">
+                          Transcripcion
+                        </TabsTrigger>
+                        <TabsTrigger value="analisis" className="rounded-lg">
+                          Analisis
+                        </TabsTrigger>
+                        <TabsTrigger value="audio" className="rounded-lg" disabled={!getRecordingUrl(call)}>
+                          Audio
+                        </TabsTrigger>
+                      </TabsList>
 
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        disabled={!!deciding}
-                        onClick={() => submitDecision("reject")}
-                        className="rounded-xl px-4 py-2 text-sm font-medium border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        {deciding === "reject" ? "Procesando..." : "Rechazar"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!!deciding}
-                        onClick={() => submitDecision("accept")}
-                        className="rounded-xl px-4 py-2 text-sm font-medium bg-green-600 text-white hover:opacity-90 disabled:opacity-50"
-                      >
-                        {deciding === "accept" ? "Procesando..." : "Aceptar llamada"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
+                      <TabsContent value="resumen" className="mt-4">
+                        <Card className="rounded-2xl border-border/60 shadow-sm">
+                          <CardHeader>
+                            <CardTitle className="text-base">Resumen</CardTitle>
+                          </CardHeader>
+                          <CardContent className="text-sm text-foreground/80 leading-relaxed">
+                            {call.summary ?? call.analysis?.call_summary ?? "Sin resumen disponible."}
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
 
-                <Tabs defaultValue="resumen" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4 rounded-xl">
-                    <TabsTrigger value="resumen" className="rounded-lg">
-                      Resumen
-                    </TabsTrigger>
-                    <TabsTrigger value="transcripcion" className="rounded-lg">
-                      Transcripcion
-                    </TabsTrigger>
-                    <TabsTrigger value="analisis" className="rounded-lg">
-                      Analisis
-                    </TabsTrigger>
-                    <TabsTrigger value="audio" className="rounded-lg" disabled={!getRecordingUrl(call)}>
-                      Audio
-                    </TabsTrigger>
-                  </TabsList>
+                      <TabsContent value="transcripcion" className="mt-4">
+                        <Card className="rounded-2xl border-border/60 shadow-sm">
+                          <CardHeader className="flex-row items-center justify-between">
+                            <CardTitle className="text-base">Transcripcion</CardTitle>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(call.transcript ?? "");
+                                setCopiedCallKey(callKey);
+                                setTimeout(() => setCopiedCallKey(null), 1500);
+                              }}
+                              disabled={!call.transcript}
+                              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <Copy className="h-4 w-4" />
+                              {copied ? "Copiado" : "Copiar"}
+                            </button>
+                          </CardHeader>
 
-                  <TabsContent value="resumen" className="mt-4">
-                    <Card className="rounded-2xl border-border/60 shadow-sm">
-                      <CardHeader>
-                        <CardTitle className="text-base">Resumen</CardTitle>
-                      </CardHeader>
-                      <CardContent className="text-sm text-foreground/80 leading-relaxed">
-                        {call.summary ?? call.analysis?.call_summary ?? "Sin resumen disponible."}
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
+                          <CardContent>
+                            <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-sm whitespace-pre-wrap leading-relaxed">
+                              {call.transcript ?? "Sin transcripcion disponible."}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
 
-                  <TabsContent value="transcripcion" className="mt-4">
-                    <Card className="rounded-2xl border-border/60 shadow-sm">
-                      <CardHeader className="flex-row items-center justify-between">
-                        <CardTitle className="text-base">Transcripcion</CardTitle>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(call.transcript ?? "");
-                            setCopied(true);
-                            setTimeout(() => setCopied(false), 1500);
-                          }}
-                          disabled={!call.transcript}
-                          className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <Copy className="h-4 w-4" />
-                          {copied ? "Copiado" : "Copiar"}
-                        </button>
-                      </CardHeader>
+                      <TabsContent value="analisis" className="mt-4">
+                        <Card className="rounded-2xl border-border/60 shadow-sm">
+                          <CardHeader>
+                            <CardTitle className="text-base">Analisis</CardTitle>
+                          </CardHeader>
 
-                      <CardContent>
-                        <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-sm whitespace-pre-wrap leading-relaxed">
-                          {call.transcript ?? "Sin transcripciÃ³n disponible."}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
+                          <CardContent className="space-y-4">
+                            <Separator />
+                            <div className="space-y-3 text-sm">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
+                                  <div className="text-xs text-muted-foreground">Sentimiento</div>
+                                  <div className="font-medium">
+                                    {call.analysis?.user_sentiment ?? "-"}
+                                  </div>
+                                </div>
 
-                  <TabsContent value="analisis" className="mt-4">
-                    <Card className="rounded-2xl border-border/60 shadow-sm">
-                      <CardHeader>
-                        <CardTitle className="text-base">Analisis</CardTitle>
-                      </CardHeader>
+                                <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
+                                  <div className="text-xs text-muted-foreground">Exitosa</div>
+                                  <div className="font-medium">
+                                    {String(call.analysis?.call_successful ?? "-")}
+                                  </div>
+                                </div>
+                              </div>
 
-                      <CardContent className="space-y-4">
-                        <Separator />
-                        <div className="space-y-3 text-sm">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                              <div className="text-xs text-muted-foreground">Sentimiento</div>
-                              <div className="font-medium">
-                                {call.analysis?.user_sentiment ?? "â€”"}
+                              <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
+                                <div className="text-xs text-muted-foreground mb-2">Resumen IA</div>
+                                <div className="leading-relaxed text-foreground/80">
+                                  {call.analysis?.call_summary ?? "-"}
+                                </div>
                               </div>
                             </div>
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
 
-                            <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                              <div className="text-xs text-muted-foreground">Exitosa</div>
-                              <div className="font-medium">
-                                {String(call.analysis?.call_successful ?? "â€”")}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
-                            <div className="text-xs text-muted-foreground mb-2">Resumen IA</div>
-                            <div className="leading-relaxed text-foreground/80">
-                              {call.analysis?.call_summary ?? "â€”"}
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value="audio" className="mt-4">
-                    <Card className="rounded-2xl border-border/60 shadow-sm">
-                      <CardHeader>
-                        <CardTitle className="text-base">Audio</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {getRecordingUrl(call) ? (
-                          <audio controls className="w-full">
-                            <source src={getRecordingUrl(call)} />
-                          </audio>
-                        ) : (
-                          <div className="text-sm text-muted-foreground">No hay audio disponible.</div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          )}
+                      <TabsContent value="audio" className="mt-4">
+                        <Card className="rounded-2xl border-border/60 shadow-sm">
+                          <CardHeader>
+                            <CardTitle className="text-base">Audio</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {getRecordingUrl(call) ? (
+                              <audio controls className="w-full">
+                                <source src={getRecordingUrl(call)} />
+                              </audio>
+                            ) : (
+                              <div className="text-sm text-muted-foreground">No hay audio disponible.</div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                </Card>
+              );
+            })}
         </div>
       </div>
     </div>

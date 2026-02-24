@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { withApiBase } from "@/lib/queryClient";
 
 type AssignedCallResponse = {
+  calls?: any[];
   call: any | null;
   attorneyId: string | null;
 };

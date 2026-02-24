@@ -46,6 +46,8 @@ export interface CallLog {
   assignmentDecisionAt?: number;
   assignmentDecisionByAttorneyId?: string;
   assignmentDecisionNotes?: string;
+  assignmentDeliveredAt?: number;
+  assignmentDeliveredByUserId?: string;
   createdAt: Date | null;
 }
 

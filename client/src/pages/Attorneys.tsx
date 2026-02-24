@@ -235,7 +235,7 @@ export default function Attorneys() {
                         <div className="text-sm text-muted-foreground truncate">{a.email}</div>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3 text-sm">
+                      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-4 text-sm">
                         <div>
                           <div className="text-xs text-muted-foreground">Teléfono</div>
                           <div>{a.phone ?? "—"}</div>
@@ -259,6 +259,11 @@ export default function Attorneys() {
                               "—"
                             )}
                           </div>
+                        </div>
+
+                        <div>
+                          <div className="text-xs text-muted-foreground">Casos asignados</div>
+                          <div className="font-semibold">{Number(a.assignedCasesCount ?? 0)}</div>
                         </div>
                       </div>
 
