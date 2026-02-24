@@ -98,8 +98,26 @@ export class ConvexStorage implements IStorage {
 
   async getLeadByRetellCallId(retellCallId: string): Promise<Lead | undefined> {
     const { client, api } = convexClient();
-    const l: any = await client.query(api.leads.getByRetellCallId, { retellCallId });
+    const normalizedRetellCallId = String(retellCallId || "").trim();
+    if (!normalizedRetellCallId) return undefined;
+
+    // Prefer callLogs as source of truth for retellCallId -> leadId mapping.
+    const callLog: any = await client.query(api.callLogs.getByRetellCallId, {
+      retellCallId: normalizedRetellCallId,
+    });
+
+    if (callLog?.leadId != null) {
+      return this.getLead(Number(callLog.leadId));
+    }
+
+    // Fallback for legacy rows where retellCallId was stored directly on leads.
+    const rows: any[] = await client.query(api.leads.list, {});
+    const l = rows.find(
+      (row) =>
+        String((row as any)?.retellCallId ?? "").trim() === normalizedRetellCallId
+    );
     if (!l) return undefined;
+
     return {
       ...l,
       createdAt: l.createdAt ? new Date(l.createdAt) : null,
@@ -109,23 +127,49 @@ export class ConvexStorage implements IStorage {
 
   async createLead(lead: InsertLead): Promise<Lead> {
     const { client, api } = convexClient();
-    const created: any = await client.mutation(api.leads.create, {
-      name: (lead as any).name ?? "Unknown Lead",
-      phone: (lead as any).phone,
-      caseType: (lead as any).caseType ?? "General",
-      urgency: (lead as any).urgency ?? "Medium",
-      status: (lead as any).status ?? "New",
-      attorneyId: (lead as any).attorneyId ?? undefined,
-      retellCallId: (lead as any).retellCallId ?? undefined,
-      retellAgentId: (lead as any).retellAgentId ?? undefined,
-      summary: (lead as any).summary ?? undefined,
-      transcript: (lead as any).transcript ?? undefined,
+    const name = String((lead as any).name ?? "Unknown Lead");
+    const phone = String((lead as any).phone ?? "Unknown");
+    const practiceArea = String(
+      (lead as any).practiceArea ?? (lead as any).caseType ?? "General"
+    );
+    const source = String(
+      (lead as any).source ?? ((lead as any).retellCallId ? "retell" : "manual")
+    );
+
+    const newId: number = await client.mutation(api.leads.create, {
+      name,
+      phone,
+      practiceArea,
+      source,
     });
-    return {
-      ...created,
-      createdAt: created.createdAt ? new Date(created.createdAt) : null,
-      lastContactedAt: created.lastContactedAt ? new Date(created.lastContactedAt) : null,
-    } as any;
+
+    // Apply optional fields in a second mutation supported by leads.update.
+    const patch: any = {};
+    const optionalFields = [
+      "caseType",
+      "urgency",
+      "status",
+      "attorneyId",
+      "summary",
+      "transcript",
+      "lastContactedAt",
+      "retellCallId",
+      "retellAgentId",
+    ];
+    for (const field of optionalFields) {
+      const value = (lead as any)[field];
+      if (value !== undefined) patch[field] = value;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      return this.updateLead(newId, patch);
+    }
+
+    const created = await this.getLead(newId);
+    if (!created) {
+      throw new Error(`Lead ${newId} no encontrado despues de crearlo`);
+    }
+    return created;
   }
 
   async updateLead(id: number, updates: UpdateLeadRequest): Promise<Lead> {
@@ -251,12 +295,27 @@ export class ConvexStorage implements IStorage {
   }
 
   async upsertLeadByRetellCallId(retellCallId: string, data: any) {
-  const { client, api } = convexClient();
-  return await client.mutation(api.leads.upsertByRetellCallId, {
-    retellCallId,
-    data,
-  });
-}
+    const normalizedRetellCallId = String(retellCallId || "").trim();
+    const payload = { ...(data || {}), retellCallId: normalizedRetellCallId };
+
+    const existing = await this.getLeadByRetellCallId(normalizedRetellCallId);
+    if (existing) {
+      return this.updateLead(existing.id, payload as any);
+    }
+
+    return this.createLead({
+      name: String(payload.name ?? "Unknown Lead"),
+      phone: String(payload.phone ?? "Unknown"),
+      caseType: payload.caseType,
+      urgency: payload.urgency,
+      status: payload.status ?? "pendiente",
+      attorneyId: payload.attorneyId,
+      retellCallId: normalizedRetellCallId || undefined,
+      retellAgentId: payload.retellAgentId,
+      summary: payload.summary,
+      transcript: payload.transcript,
+    } as any);
+  }
 
   // -------------------------
   // Stats

@@ -30,12 +30,12 @@ export function Sidebar() {
   const [, navigate] = useLocation();
 
   const handleLogout = async () => {
-    // UI inmediata
-    queryClient.setQueryData(["/api/auth/me"], null);
-    navigate("/login");
-
-    // Backend después
-    await logout.mutateAsync();
+    try {
+      await logout.mutateAsync();
+      navigate("/login");
+    } catch {
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    }
   };
 
   // ✅ Solo admins ven "Usuarios"

@@ -42,6 +42,8 @@ function toSafeUser(u: any): SafeUser {
 export function setupAuth(app: Express) {
   const sessionSecret = process.env.SESSION_SECRET || "dev-secret-change-me";
   const MemoryStore = MemoryStoreFactory(session);
+  const isProduction = process.env.NODE_ENV === "production";
+  const cookieSameSite: "lax" | "none" = isProduction ? "none" : "lax";
 
 app.set("trust proxy", 1);
 
@@ -53,8 +55,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,        // obligatorio en HTTPS
-      sameSite: "lax",    
+      secure: isProduction,
+      sameSite: cookieSameSite,
       maxAge: 1000 * 60 * 60 * 24 * 7,
     },
   })

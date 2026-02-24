@@ -381,62 +381,6 @@ ${JSON.stringify(callsData, null, 2)}
       return res.status(500).json({ error: "AI assistant failed" });
     }
   });
- 
-
-  /* ================= LOGIN ================= */
-
-  app.post("/api/auth/login", async (req: any, res) => {
-    try {
-      const email = String(req.body?.email || "")
-        .toLowerCase()
-        .trim();
-      const password = String(req.body?.password || "");
-
-      if (!email || !password) {
-        return res
-          .status(400)
-          .json({ message: "Email y password obligatorios" });
-      }
-
-      const user = await storage.getUserByEmail(email);
-      if (!user || !(user as any).passwordHash) {
-        return res
-          .status(401)
-          .json({ message: "Credenciales invÃ¡lidas" });
-      }
-
-      const ok = await bcrypt.compare(password, String((user as any).passwordHash));
-      if (!ok) {
-        return res
-          .status(401)
-          .json({ message: "Credenciales invÃ¡lidas" });
-      }
-
-      (req.session as any).userId = user.id;
-      const normalizedRole = normalizeUserRole((user as any).role) ?? "agent";
-      (req.session as any).role = normalizedRole;
-
-      return res.json({
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: normalizedRole,
-        },
-      });
-    } catch (err: any) {
-      return res
-        .status(500)
-        .json({ message: err?.message ?? "Login failed" });
-    }
-  });
-
-  app.post("/api/auth/logout", async (req: any, res) => {
-    req.session?.destroy?.(() => {});
-    res.clearCookie?.("connect.sid");
-    return res.json({ success: true });
-  });
-
   /* ================= USERS (ADMIN) ================= */
 
   app.get("/api/users", requireAdmin as any, async (_req, res) => {
