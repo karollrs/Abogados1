@@ -104,6 +104,7 @@ passport.deserializeUser(async (id: string, done: any) => {
 
   app.get("/api/auth/me", (req: Request, res: Response) => {
     const r = req as AuthRequest;
+    res.setHeader("Cache-Control", "no-store");
     if (!r.isAuthenticated?.() || !r.user) return res.status(401).json({ message: "Unauthorized" });
     return res.json(toSafeUser(r.user));
   });
@@ -114,21 +115,68 @@ passport.deserializeUser(async (id: string, done: any) => {
       if (!user) return res.status(401).json({ message: info?.message || "Unauthorized" });
 
       const r = req as AuthRequest;
-      r.logIn?.(user, (err2?: any) => {
-        if (err2) return next(err2);
-        return res.json({ user: toSafeUser(user) });
-      });
+
+      const doLogin = () => {
+        if (!r.logIn) return res.status(500).json({ message: "Auth unavailable" });
+        r.logIn(user, (err2?: any) => {
+          if (err2) return next(err2);
+
+          // Ensure the session is persisted before responding.
+          if (r.session?.save) {
+            return r.session.save((saveErr: any) => {
+              if (saveErr) return next(saveErr);
+              res.setHeader("Cache-Control", "no-store");
+              return res.json({ user: toSafeUser(user) });
+            });
+          }
+
+          res.setHeader("Cache-Control", "no-store");
+          return res.json({ user: toSafeUser(user) });
+        });
+      };
+
+      // Regenerate session id when logging in to avoid session fixation
+      // and to fully replace any prior authenticated session.
+      if (r.session?.regenerate) {
+        return r.session.regenerate((regenErr: any) => {
+          if (regenErr) return next(regenErr);
+          return doLogin();
+        });
+      }
+
+      return doLogin();
     })(req, res, next);
   });
 
-  app.post("/api/auth/logout", (req: Request, res: Response) => {
+  app.post("/api/auth/logout", (req: Request, res: Response, next: NextFunction) => {
     const r = req as AuthRequest;
-    r.logout?.(() => {
-      r.session?.destroy?.(() => {
-        res.clearCookie("connect.sid");
-        return res.json({ success: true });
+    const clearSessionCookie = () => {
+      res.clearCookie("connect.sid", {
+        path: "/",
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: cookieSameSite,
       });
-    });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ success: true });
+    };
+
+    const destroySession = () => {
+      if (!r.session?.destroy) return clearSessionCookie();
+      return r.session.destroy((destroyErr: any) => {
+        if (destroyErr) return next(destroyErr);
+        return clearSessionCookie();
+      });
+    };
+
+    if (typeof r.logout === "function") {
+      return r.logout((logoutErr?: any) => {
+        if (logoutErr) return next(logoutErr);
+        return destroySession();
+      });
+    }
+
+    return destroySession();
   });
 
   app.post("/api/auth/bootstrap", async (req: Request, res: Response) => {

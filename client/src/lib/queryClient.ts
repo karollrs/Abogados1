@@ -63,6 +63,7 @@ async function readError(res: Response) {
 export async function apiRequest(method: string, url: string, body?: unknown) {
   const res = await fetch(withApiBase(url), {
     method,
+    cache: "no-store",
     headers: {
       Accept: "application/json",
       ...(body ? { "Content-Type": "application/json" } : {}),
@@ -83,6 +84,7 @@ export function getQueryFn({ on401 }: { on401: "throw" | "returnNull" }) {
     const url = String(queryKey[0]);
 
     const res = await fetch(withApiBase(url), {
+      cache: "no-store",
       credentials: "include",
       headers: { Accept: "application/json" },
     });

@@ -26,8 +26,8 @@ export function useUser() {
   return useQuery<User | null>({
     queryKey: ["/api/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }) as any,
-    staleTime: Infinity,           // 👈 importante
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
     retry: false,
   });
 }
@@ -41,6 +41,7 @@ export function useLogin() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["/api/auth/me"], data.user);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     },
   });
 }
@@ -52,6 +53,7 @@ export function useLogout() {
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/auth/me"], null);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     },
   });
 }
