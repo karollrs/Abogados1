@@ -1,8 +1,8 @@
-﻿﻿import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useLocation } from "wouter";
 import { useLogin } from "@/hooks/use-auth";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, withApiBase } from "@/lib/queryClient";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -12,6 +12,30 @@ export default function Login() {
   const [, navigate] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const login = useLogin();
+  const oauthErrorCode = useMemo(
+    () => new URLSearchParams(window.location.search).get("error"),
+    []
+  );
+
+  const oauthErrorMessage = useMemo(() => {
+    switch (String(oauthErrorCode ?? "").trim()) {
+      case "not_registered":
+        return "Tu correo no esta registrado en el CRM.";
+      case "user_disabled":
+        return "Tu usuario esta deshabilitado.";
+      case "google_no_email":
+        return "Google no devolvio un correo valido para iniciar sesion.";
+      case "google_not_configured":
+        return "Login con Google no configurado en el servidor.";
+      default:
+        return null;
+    }
+  }, [oauthErrorCode]);
+
+  useEffect(() => {
+    if (!oauthErrorMessage) return;
+    setError(oauthErrorMessage);
+  }, [oauthErrorMessage]);
 
 
   async function onSubmit(e: React.FormEvent) {
@@ -37,14 +61,14 @@ export default function Login() {
       password: submittedPassword,
     });
 
-    // 👇 forzamos sincronización real
+    // ?? forzamos sincronizaci�n real
     await queryClient.invalidateQueries({
       queryKey: ["/api/auth/me"],
     });
 
     navigate("/");
   } catch (err: any) {
-    setError(err?.message || "No se pudo iniciar sesión");
+    setError(err?.message || "No se pudo iniciar sesi�n");
   } finally {
     setLoading(false);
   }
@@ -140,6 +164,16 @@ export default function Login() {
                 >
                   {loading || login.isPending ? "Entrando..." : "Entrar"}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = withApiBase("/auth/google");
+                  }}
+                  className="w-full rounded-xl border border-blue-200 bg-white hover:bg-blue-50 text-blue-700 py-2.5 text-sm font-semibold transition"
+                >
+                  Iniciar con Google
+                </button>
               </form>
             </div>
           </div>
@@ -148,3 +182,6 @@ export default function Login() {
     </div>
   );
 }
+
+
+

@@ -3,6 +3,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import bcrypt from "bcryptjs";
 import MemoryStoreFactory from "memorystore";
 
@@ -43,7 +44,25 @@ export function setupAuth(app: Express) {
   const sessionSecret = process.env.SESSION_SECRET || "dev-secret-change-me";
   const MemoryStore = MemoryStoreFactory(session);
   const isProduction = process.env.NODE_ENV === "production";
-  const cookieSameSite: "lax" | "none" = isProduction ? "none" : "lax";
+  const cookieSameSite: "lax" | "none" =
+    String(process.env.SESSION_SAME_SITE ?? "").toLowerCase().trim() === "none"
+      ? "none"
+      : "lax";
+  const frontendBaseUrl = String(process.env.FRONTEND_URL ?? "").trim();
+  const googleClientId = String(process.env.GOOGLE_CLIENT_ID ?? "").trim();
+  const googleClientSecret = String(process.env.GOOGLE_CLIENT_SECRET ?? "").trim();
+  const googleConfigured = Boolean(googleClientId && googleClientSecret);
+
+  const buildFrontendRedirect = (path: string): string => {
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    if (!frontendBaseUrl) return cleanPath;
+    return `${frontendBaseUrl.replace(/\/+$/, "")}${cleanPath}`;
+  };
+
+  const buildLoginErrorRedirect = (reason: string): string => {
+    const qs = new URLSearchParams({ error: reason }).toString();
+    return `${buildFrontendRedirect("/login")}?${qs}`;
+  };
 
 app.set("trust proxy", 1);
 
@@ -87,6 +106,38 @@ passport.use(
     }
   )
 );
+
+if (googleConfigured) {
+  passport.use(
+    new GoogleStrategy(
+      {
+        clientID: googleClientId,
+        clientSecret: googleClientSecret,
+        callbackURL: "/auth/google/callback",
+      },
+      async (_accessToken: string, _refreshToken: string, profile: any, done: any) => {
+        try {
+          const email = String(profile.emails?.[0]?.value ?? "")
+            .toLowerCase()
+            .trim();
+          if (!email) return done(null, false, { message: "google_no_email" });
+
+          const user = await storage.getUserByEmail(email);
+
+          // Regla de negocio: si no existe el usuario, no permitir acceso.
+          if (!user) return done(null, false, { message: "not_registered" });
+          if (Number((user as any)?.isActive ?? 1) === 0) {
+            return done(null, false, { message: "user_disabled" });
+          }
+
+          return done(null, user);
+        } catch (err) {
+          return done(err as any);
+        }
+      }
+    )
+  );
+}
 
 passport.serializeUser((user: any, done: any) => done(null, String(user?.id)));
 
@@ -137,6 +188,57 @@ passport.deserializeUser(async (id: string, done: any) => {
 
       // Regenerate session id when logging in to avoid session fixation
       // and to fully replace any prior authenticated session.
+      if (r.session?.regenerate) {
+        return r.session.regenerate((regenErr: any) => {
+          if (regenErr) return next(regenErr);
+          return doLogin();
+        });
+      }
+
+      return doLogin();
+    })(req, res, next);
+  });
+
+  app.get("/auth/google", (req: Request, res: Response, next: NextFunction) => {
+    if (!googleConfigured) {
+      return res.redirect(buildLoginErrorRedirect("google_not_configured"));
+    }
+    return passport.authenticate("google", { scope: ["profile", "email"] })(
+      req,
+      res,
+      next
+    );
+  });
+
+  app.get("/auth/google/callback", (req: Request, res: Response, next: NextFunction) => {
+    if (!googleConfigured) {
+      return res.redirect(buildLoginErrorRedirect("google_not_configured"));
+    }
+
+    return passport.authenticate("google", (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      if (!user) {
+        const reason = String(info?.message ?? "not_registered");
+        return res.redirect(buildLoginErrorRedirect(reason));
+      }
+
+      const r = req as AuthRequest;
+      if (!r.logIn) return next(new Error("Auth unavailable"));
+
+      const doLogin = () =>
+        r.logIn!(user, (loginErr?: any) => {
+          if (loginErr) return next(loginErr);
+
+          if (r.session?.save) {
+            return r.session.save((saveErr: any) => {
+              if (saveErr) return next(saveErr);
+              return res.redirect(buildFrontendRedirect("/"));
+            });
+          }
+
+          return res.redirect(buildFrontendRedirect("/"));
+        });
+
       if (r.session?.regenerate) {
         return r.session.regenerate((regenErr: any) => {
           if (regenErr) return next(regenErr);
@@ -214,3 +316,4 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
   return next();
 }
+
