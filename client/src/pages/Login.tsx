@@ -61,14 +61,14 @@ export default function Login() {
       password: submittedPassword,
     });
 
-    // ?? forzamos sincronización real
+    // ?? forzamos sincronizaciÃ³n real
     await queryClient.invalidateQueries({
       queryKey: ["/api/auth/me"],
     });
 
     navigate("/");
   } catch (err: any) {
-    setError(err?.message || "No se pudo iniciar sesión");
+    setError(err?.message || "No se pudo iniciar sesiÃ³n");
   } finally {
     setLoading(false);
   }
@@ -172,7 +172,31 @@ export default function Login() {
                   }}
                   className="w-full rounded-xl border border-blue-200 bg-white hover:bg-blue-50 text-blue-700 py-2.5 text-sm font-semibold transition"
                 >
-                  Iniciar con Google
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4"
+                    >
+                      <path
+                        d="M23.49 12.27c0-.79-.07-1.55-.2-2.27H12v4.3h6.44a5.5 5.5 0 0 1-2.39 3.61v3h3.87c2.27-2.09 3.57-5.18 3.57-8.64z"
+                        fill="#4285F4"
+                      />
+                      <path
+                        d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.87-3c-1.07.72-2.44 1.15-4.08 1.15-3.14 0-5.8-2.12-6.75-4.97H1.25v3.09A12 12 0 0 0 12 24z"
+                        fill="#34A853"
+                      />
+                      <path
+                        d="M5.25 14.27A7.2 7.2 0 0 1 4.87 12c0-.79.14-1.56.38-2.27V6.64H1.25A12 12 0 0 0 0 12c0 1.94.46 3.77 1.25 5.36l4-3.09z"
+                        fill="#FBBC05"
+                      />
+                      <path
+                        d="M12 4.77c1.76 0 3.34.61 4.58 1.8l3.44-3.44C17.95 1.18 15.23 0 12 0A12 12 0 0 0 1.25 6.64l4 3.09c.95-2.85 3.61-4.96 6.75-4.96z"
+                        fill="#EA4335"
+                      />
+                    </svg>
+                    Iniciar con Google
+                  </span>
                 </button>
               </form>
             </div>
@@ -182,6 +206,7 @@ export default function Login() {
     </div>
   );
 }
+
 
 
 
