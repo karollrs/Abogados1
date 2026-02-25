@@ -8,12 +8,14 @@ const statusStyles = {
   pendiente: "bg-yellow-100 text-yellow-800 ring-yellow-600/20",
   en_espera_aceptacion: "bg-blue-100 text-blue-800 ring-blue-600/20",
   asignada: "bg-green-100 text-green-800 ring-green-600/20",
+  finalizado: "bg-slate-200 text-slate-800 ring-slate-500/20",
 };
 
 const statusLabels = {
   pendiente: "Pendiente",
   en_espera_aceptacion: "En revisión",
   asignada: "Asignada",
+  finalizado: "Finalizado",
 };
 
 
@@ -27,9 +29,10 @@ const urgencyStyles = {
 interface LeadsTableProps {
   leads: Lead[];
   isLoading: boolean;
+  callLogsPath?: string;
 }
 
-export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
+export function LeadsTable({ leads, isLoading, callLogsPath = "/calls" }: LeadsTableProps) {
 
   const [, navigate] = useLocation();
 
@@ -141,10 +144,14 @@ export function LeadsTable({ leads, isLoading }: LeadsTableProps) {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        const callId = String(lead.retellCallId ?? "").trim();
                         const phone = lead.phone || "";
-                        navigate(
-                          `/calls?phone=${encodeURIComponent(phone)}&from=${encodeURIComponent("/")}`
-                        );
+                        if (callId) {
+                          navigate(`${callLogsPath}?callId=${encodeURIComponent(callId)}`);
+                          return;
+                        }
+
+                        navigate(`${callLogsPath}?phone=${encodeURIComponent(phone)}`);
 
                       }}
                       className="text-muted-foreground hover:text-primary transition-colors p-2 rounded-lg hover:bg-primary/5"

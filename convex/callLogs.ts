@@ -2,6 +2,24 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { nextId } from "./helpers";
 
+async function findCallLogByRetellCallId(ctx: any, retellCallId: string) {
+  const matches = await ctx.db
+    .query("callLogs")
+    .withIndex("by_retellCallId", (q: any) => q.eq("retellCallId", retellCallId))
+    .collect();
+  if (!matches.length) return null;
+  return matches.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+}
+
+async function findLeadByNumericId(ctx: any, id: number) {
+  const matches = await ctx.db
+    .query("leads")
+    .filter((q: any) => q.eq(q.field("id"), id))
+    .collect();
+  if (!matches.length) return null;
+  return matches.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+}
+
 /* ============================================================
    LISTAR CALL LOGS
 ============================================================ */
@@ -87,12 +105,7 @@ export const listWithLead = query({
 export const getByRetellCallId = query({
   args: { retellCallId: v.string() },
   handler: async (ctx, { retellCallId }) => {
-    return await ctx.db
-      .query("callLogs")
-      .withIndex("by_retellCallId", (q) =>
-        q.eq("retellCallId", retellCallId)
-      )
-      .unique();
+    return await findCallLogByRetellCallId(ctx, retellCallId);
   },
 });
 
@@ -115,10 +128,7 @@ export const updateCallStatus = mutation({
     const call = await ctx.db.get(callId);
     if (!call?.leadId) return;
 
-    const lead = await ctx.db
-      .query("leads")
-      .filter((q) => q.eq(q.field("id"), call.leadId))
-      .unique();
+    const lead = await findLeadByNumericId(ctx, call.leadId);
 
     if (lead) {
       await ctx.db.patch(lead._id, { status });
@@ -151,12 +161,7 @@ export const upsertByRetellCallId = mutation({
     }
 
     // 1️⃣ Buscar existente
-    const existing = await ctx.db
-      .query("callLogs")
-      .withIndex("by_retellCallId", (q) =>
-        q.eq("retellCallId", retellCallId)
-      )
-      .unique();
+    const existing = await findCallLogByRetellCallId(ctx, retellCallId);
 
     // 2️⃣ Si existe → patch
     if (existing) {
@@ -190,14 +195,11 @@ export const upsertByRetellCallId = mutation({
 
       await ctx.db.patch(existing._id, patch);
 
-      const updated = await ctx.db.get(existing._id);
+      const updated: any = await ctx.db.get(existing._id);
 
       // 🔁 Sincronizar lead si cambió status
       if (updated?.leadId && normalizedUpdates?.status) {
-        const lead = await ctx.db
-          .query("leads")
-          .filter((q) => q.eq(q.field("id"), updated.leadId))
-          .unique();
+        const lead = await findLeadByNumericId(ctx, updated.leadId);
 
         if (lead) {
           await ctx.db.patch(lead._id, {
@@ -235,10 +237,7 @@ export const upsertByRetellCallId = mutation({
 
       // 🔁 Sincronizar lead
       if (normalizedUpdates?.leadId != null) {
-        const lead = await ctx.db
-          .query("leads")
-          .filter((q) => q.eq(q.field("id"), normalizedUpdates.leadId))
-          .unique();
+        const lead = await findLeadByNumericId(ctx, normalizedUpdates.leadId);
 
         if (lead) {
           await ctx.db.patch(lead._id, {
@@ -251,12 +250,7 @@ export const upsertByRetellCallId = mutation({
 
     } catch (err) {
       // 4️⃣ Si ocurre condición de carrera → reconsultar
-      const retry = await ctx.db
-        .query("callLogs")
-        .withIndex("by_retellCallId", (q) =>
-          q.eq("retellCallId", retellCallId)
-        )
-        .unique();
+      const retry = await findCallLogByRetellCallId(ctx, retellCallId);
 
       if (retry) return retry;
 

@@ -26,7 +26,25 @@ function normalizeLeadStatus(value: unknown): string {
     return "asignada";
   }
 
+  if (
+    s === "finalizado" ||
+    s === "finalizada" ||
+    s === "finalized" ||
+    s === "closed"
+  ) {
+    return "finalizado";
+  }
+
   return s;
+}
+
+async function findLeadByNumericId(ctx: any, id: number) {
+  const matches = await ctx.db
+    .query("leads")
+    .filter((q: any) => q.eq(q.field("id"), id))
+    .collect();
+  if (!matches.length) return null;
+  return matches.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
 }
 
 /* ============================= */
@@ -102,10 +120,7 @@ export const create = mutation({
 export const get = query({
   args: { id: v.number() },
   handler: async (ctx, { id }) => {
-    return await ctx.db
-      .query("leads")
-      .filter((q) => q.eq(q.field("id"), id))
-      .unique();
+    return await findLeadByNumericId(ctx, id);
   },
 });
 
@@ -119,10 +134,7 @@ export const update = mutation({
     updates: v.any(),
   },
   handler: async (ctx, { id, updates }) => {
-    const lead = await ctx.db
-      .query("leads")
-      .filter((q) => q.eq(q.field("id"), id))
-      .unique();
+    const lead = await findLeadByNumericId(ctx, id);
 
     if (!lead) throw new Error("Lead not found");
 
@@ -157,10 +169,7 @@ export const update = mutation({
 export const assignAttorney = mutation({
   args: { id: v.number(), attorneyId: v.string() },
   handler: async (ctx, { id, attorneyId }) => {
-    const lead = await ctx.db
-      .query("leads")
-      .filter((q) => q.eq(q.field("id"), id))
-      .unique();
+    const lead = await findLeadByNumericId(ctx, id);
 
     if (!lead) throw new Error("Lead not found");
 
@@ -210,7 +219,7 @@ export const createManualLead = mutation({
       id: callLogId,
       leadId: newId,
       retellCallId: `manual-${newId}-${now}`,
-      status: "completed",
+      status: "pendiente",
       direction: "manual",
       createdAt: now,
     });

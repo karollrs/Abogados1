@@ -5,10 +5,12 @@ export const getById = query({
   // ESTE id es tu campo legacy "attorneys.id" (string uuid)
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
-    return await ctx.db
+    const matches = await ctx.db
       .query("attorneys")
       .withIndex("by_attorneyId", (q) => q.eq("id", id))
-      .unique();
+      .collect();
+    if (!matches.length) return null;
+    return matches.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
   },
 });
 

@@ -1,12 +1,22 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { useCallLogs } from "@/hooks/use-call-logs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Phone, Clock, Copy, Gavel, MapPin, Send } from "lucide-react";
+import {
+  Phone,
+  Clock,
+  Copy,
+  Gavel,
+  MapPin,
+  Send,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 import { US_CITIES } from "@/hooks/usCities";
 import { CASE_TYPES } from "@/hooks/caseTypes";
@@ -50,7 +60,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
         <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-        En espera de aceptaciÃ³n
+        En espera de aceptación
       </span>
     );
   }
@@ -60,6 +70,15 @@ function StatusBadge({ status }: { status?: string | null }) {
       <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-950/30 dark:text-green-300">
         <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
         Aceptada por abogado
+      </span>
+    );
+  }
+
+  if (s === "finalizado") {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-900/30 dark:text-slate-300">
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+        Finalizado
       </span>
     );
   }
@@ -75,7 +94,7 @@ function StatusBadge({ status }: { status?: string | null }) {
 
   return (
     <span className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-      {status ?? "â€”"}
+      {status ?? "—"}
     </span>
   );
 }
@@ -89,6 +108,23 @@ function firstText(...values: any[]): string {
     if (text) return text;
   }
   return "";
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  const message = String((error as any)?.message ?? "").trim();
+  if (!message) return fallback;
+
+  try {
+    const parsed = JSON.parse(message);
+    if (typeof parsed === "string" && parsed.trim()) return parsed.trim();
+    if (parsed && typeof parsed.message === "string" && parsed.message.trim()) {
+      return parsed.message.trim();
+    }
+  } catch {
+    // Keep the original message when it is not JSON.
+  }
+
+  return message;
 }
 
 function getCallCity(call: any): string {
@@ -372,7 +408,7 @@ function Field({ label, value }: { label: string; value: any }) {
   return (
     <div className="space-y-1">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="font-medium">{value || "—"}</div>
+      <div className="font-medium">{value || "�"}</div>
     </div>
   );
 }
@@ -396,17 +432,18 @@ function BooleanField({ label, value }: { label: string; value: any }) {
 
 export default function CallLogs() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   const { data: logs, isLoading, error, refetch: refetchCallLogs } = useCallLogs();
 
 
-  // âœ… Fuente REAL de query params (no falla)
+  // ✅ Fuente REAL de query params (no falla)
   const [searchStr, setSearchStr] = useState(() => window.location.search);
 
 
 
 
-  // âœ… Actualiza searchStr si cambia la URL (cuando navegas con wouter)
+  // ✅ Actualiza searchStr si cambia la URL (cuando navegas con wouter)
 
 
 
@@ -423,6 +460,16 @@ export default function CallLogs() {
   const phoneFromUrl = sp.get("phone");
   const callIdFromUrl = sp.get("callId");
   const fromUrl = sp.get("from"); // "/leads" o "/dashboard"
+  const clearCallQueryParams = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("phone");
+    url.searchParams.delete("callId");
+    url.searchParams.delete("from");
+    const nextSearch = url.searchParams.toString();
+    const nextUrl = `${url.pathname}${nextSearch ? `?${nextSearch}` : ""}`;
+    window.history.replaceState(window.history.state, "", nextUrl);
+    setSearchStr(window.location.search);
+  }, []);
 
   // modal detalle
   const [open, setOpen] = useState(false);
@@ -507,14 +554,19 @@ export default function CallLogs() {
   }, [logs, cityText, caseTypeText, nameOrPhoneText]);
 
   // PAGINACION
-  const ITEMS_PER_PAGE = 7;
+  const ITEMS_PER_PAGE = 5;
   const [completePage, setCompletePage] = useState(1);
   const [incompletePage, setIncompletePage] = useState(1);
+  const [manualPage, setManualPage] = useState(1);
+  const [openCompleteSection, setOpenCompleteSection] = useState(false);
+  const [openIncompleteSection, setOpenIncompleteSection] = useState(false);
+  const [openManualSection, setOpenManualSection] = useState(false);
 
   // Resetear paginas cuando cambien filtros o datos
   useEffect(() => {
     setCompletePage(1);
     setIncompletePage(1);
+    setManualPage(1);
   }, [cityText, caseTypeText, nameOrPhoneText, logs]);
 
   const { completeLogsAll, incompleteLogsAll, manualLogsAll } = useMemo(() => {
@@ -557,6 +609,10 @@ export default function CallLogs() {
     1,
     Math.ceil(incompleteLogsAll.length / ITEMS_PER_PAGE)
   );
+  const manualTotalPages = Math.max(
+    1,
+    Math.ceil(manualLogsAll.length / ITEMS_PER_PAGE)
+  );
 
   useEffect(() => {
     setCompletePage((p) => Math.min(p, completeTotalPages));
@@ -565,6 +621,10 @@ export default function CallLogs() {
   useEffect(() => {
     setIncompletePage((p) => Math.min(p, incompleteTotalPages));
   }, [incompleteTotalPages]);
+
+  useEffect(() => {
+    setManualPage((p) => Math.min(p, manualTotalPages));
+  }, [manualTotalPages]);
 
   const completeLogs = useMemo(() => {
     const start = (completePage - 1) * ITEMS_PER_PAGE;
@@ -576,8 +636,13 @@ export default function CallLogs() {
     return incompleteLogsAll.slice(start, start + ITEMS_PER_PAGE);
   }, [incompleteLogsAll, incompletePage]);
 
+  const manualLogs = useMemo(() => {
+    const start = (manualPage - 1) * ITEMS_PER_PAGE;
+    return manualLogsAll.slice(start, start + ITEMS_PER_PAGE);
+  }, [manualLogsAll, manualPage]);
 
-  // âœ… Auto-open por phone
+
+  // ✅ Auto-open por phone
 
   useEffect(() => {
     if (!phoneFromUrl) return;
@@ -600,7 +665,7 @@ export default function CallLogs() {
     }
   }, [phoneFromUrl, logs, open]);
 
-  // âœ… Auto-open por callId
+  // ✅ Auto-open por callId
   useEffect(() => {
     if (!callIdFromUrl) return;
     if (!logs?.length) return;
@@ -617,7 +682,7 @@ export default function CallLogs() {
     }
   }, [callIdFromUrl, logs, open]);
 
-  // âœ… Cargar abogados cuando abres el modal asignar
+  // ✅ Cargar abogados cuando abres el modal asignar
   useEffect(() => {
     if (!assignOpen) return;
 
@@ -744,7 +809,11 @@ export default function CallLogs() {
   const sendToAcceptedAttorney = async (call: any) => {
     const retellCallId = getRetellCallId(call);
     if (!retellCallId) {
-      alert("No se encontro callId para este caso.");
+      toast({
+        title: "No se puede enviar este caso",
+        description: "No se encontro callId para esta llamada.",
+        className: "border-amber-200 bg-amber-50 text-amber-900",
+      });
       return;
     }
     try {
@@ -759,10 +828,18 @@ export default function CallLogs() {
       );
       if (!r.ok) throw new Error(await r.text());
       const data = await r.json();
-      alert(`Caso enviado al abogado: ${String(data?.to ?? "sin correo")}`);
+      toast({
+        title: "Caso enviado al abogado",
+        description: `Destino: ${String(data?.to ?? "sin correo")}`,
+        className: "border-emerald-200 bg-emerald-50 text-emerald-900",
+      });
       await refetchCallLogs();
     } catch (e: any) {
-      alert(e?.message ?? "No se pudo enviar el caso al abogado");
+      toast({
+        variant: "destructive",
+        title: "Error enviando al abogado",
+        description: getErrorMessage(e, "No se pudo enviar el caso al abogado"),
+      });
     } finally {
       setSendingToAttorneyCallId(null);
     }
@@ -795,8 +872,17 @@ export default function CallLogs() {
       const updated = await response.json();
       setSelected((prev: any) => ({ ...(prev ?? {}), ...(updated ?? {}), ...payload }));
       await refetchCallLogs();
+      toast({
+        title: "Datos actualizados",
+        description: "La informacion del caso se guardo correctamente.",
+        className: "border-emerald-200 bg-emerald-50 text-emerald-900",
+      });
     } catch (e: any) {
-      alert(e?.message ?? "No se pudo guardar la informacion del caso");
+      toast({
+        variant: "destructive",
+        title: "Error guardando datos",
+        description: getErrorMessage(e, "No se pudo guardar la informacion del caso"),
+      });
     } finally {
       setSavingCaseDetails(false);
     }
@@ -842,7 +928,7 @@ export default function CallLogs() {
               <input
                 list="us-cities"
                 type="text"
-                placeholder="Escribe una ciudadâ€¦"
+                placeholder="Escribe una ciudad…"
                 value={cityText}
                 onChange={(e) => setCityText(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -861,7 +947,7 @@ export default function CallLogs() {
               <input
                 list="case-types"
                 type="text"
-                placeholder="Escribe un tipo de casoâ€¦"
+                placeholder="Escribe un tipo de caso…"
                 value={caseTypeText}
                 onChange={(e) => setCaseTypeText(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -888,7 +974,7 @@ export default function CallLogs() {
             </CardHeader>
 
             <CardContent className="pt-0">
-              {isLoading && <div className="text-muted-foreground">Cargando…</div>}
+              {isLoading && <div className="text-muted-foreground">Cargando�</div>}
 
               {error && (
                 <div className="text-destructive">
@@ -902,150 +988,252 @@ export default function CallLogs() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-8">
-                {/* ========================= */}
-                {/* 1️⃣ LLAMADAS COMPLETAS */}
-                {/* ========================= */}
-                <div className="space-y-4">
+              <div className="flex flex-col gap-6">
+                <div className="space-y-4 rounded-xl border border-border/60 p-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-green-700 dark:text-green-300">
+                    <button
+                      type="button"
+                      onClick={() => setOpenCompleteSection((v) => !v)}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-green-700 dark:text-green-300"
+                    >
+                      {openCompleteSection ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
                       Llamadas completas
-                    </h3>
+                    </button>
                     <span className="inline-flex min-w-9 items-center justify-center rounded-full bg-muted px-3 py-1 text-lg font-bold text-foreground">
                       {completeLogsAll.length}
                     </span>
                   </div>
 
-                  {completeLogsAll.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
-                      No hay llamadas completas.
-                    </div>
-                  )}
+                  {openCompleteSection && (
+                    <>
+                      {completeLogsAll.length === 0 && (
+                        <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+                          No hay llamadas completas.
+                        </div>
+                      )}
 
-                  {completeLogs.map((l: any) => (
-                    <CallCard
-                      key={l.id}
-                      call={l}
-                      onView={() => {
-                        setSelected(l);
-                        setOpen(true);
-                      }}
-                      onAssign={
-                        String(l?.status ?? "").toLowerCase() === "asignada"
-                          ? undefined
-                          : () => {
-                              setSelected(l);
-                              setAssignOpen(true);
+                      {completeLogs.map((l: any) => (
+                        <CallCard
+                          key={l.id}
+                          call={l}
+                          onView={() => {
+                            setSelected(l);
+                            setOpen(true);
+                          }}
+                          onAssign={
+                            String(l?.status ?? "").toLowerCase() === "asignada"
+                              ? undefined
+                              : () => {
+                                  setSelected(l);
+                                  setAssignOpen(true);
+                                }
+                          }
+                          onSendToAttorney={
+                            isReadyToSendToAttorney(l)
+                              ? () => void sendToAcceptedAttorney(l)
+                              : undefined
+                          }
+                          sendingToAttorney={
+                            String(sendingToAttorneyCallId ?? "") === getRetellCallId(l)
+                          }
+                        />
+                      ))}
+
+                      {completeLogsAll.length > 0 && (
+                        <div className="flex items-center justify-end gap-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setCompletePage((p) => Math.max(1, p - 1))}
+                            disabled={completePage <= 1}
+                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Anterior
+                          </button>
+                          <span className="text-xs text-muted-foreground">
+                            Pagina {completePage} de {completeTotalPages}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCompletePage((p) => Math.min(completeTotalPages, p + 1))
                             }
-                      }
-                      onSendToAttorney={
-                        isReadyToSendToAttorney(l)
-                          ? () => void sendToAcceptedAttorney(l)
-                          : undefined
-                      }
-                      sendingToAttorney={
-                        String(sendingToAttorneyCallId ?? "") === getRetellCallId(l)
-                      }
-                    />
-                  ))}
+                            disabled={completePage >= completeTotalPages}
+                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Siguiente
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
 
-                <Separator />
-
-                {/* ========================= */}
-                {/* 2️⃣ LLAMADAS INCOMPLETAS */}
-                {/* ========================= */}
-                <div className="space-y-4">
+                <div className="space-y-4 rounded-xl border border-border/60 p-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">
+                    <button
+                      type="button"
+                      onClick={() => setOpenIncompleteSection((v) => !v)}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-300"
+                    >
+                      {openIncompleteSection ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
                       Llamadas incompletas / cortadas
-                    </h3>
+                    </button>
                     <span className="inline-flex min-w-9 items-center justify-center rounded-full bg-muted px-3 py-1 text-lg font-bold text-foreground">
                       {incompleteLogsAll.length}
                     </span>
                   </div>
 
-                  {incompleteLogsAll.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
-                      No hay llamadas incompletas.
-                    </div>
-                  )}
+                  {openIncompleteSection && (
+                    <>
+                      {incompleteLogsAll.length === 0 && (
+                        <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+                          No hay llamadas incompletas.
+                        </div>
+                      )}
 
-                  {incompleteLogs.map((l: any) => (
-                    <CallCard
-                      key={l.id}
-                      call={l}
-                      onView={() => {
-                        setSelected(l);
-                        setOpen(true);
-                      }}
-                      onAssign={
-                        String(l?.status ?? "").toLowerCase() === "asignada"
-                          ? undefined
-                          : () => {
-                              setSelected(l);
-                              setAssignOpen(true);
+                      {incompleteLogs.map((l: any) => (
+                        <CallCard
+                          key={l.id}
+                          call={l}
+                          onView={() => {
+                            setSelected(l);
+                            setOpen(true);
+                          }}
+                          onAssign={
+                            String(l?.status ?? "").toLowerCase() === "asignada"
+                              ? undefined
+                              : () => {
+                                  setSelected(l);
+                                  setAssignOpen(true);
+                                }
+                          }
+                          onSendToAttorney={
+                            isReadyToSendToAttorney(l)
+                              ? () => void sendToAcceptedAttorney(l)
+                              : undefined
+                          }
+                          sendingToAttorney={
+                            String(sendingToAttorneyCallId ?? "") === getRetellCallId(l)
+                          }
+                        />
+                      ))}
+
+                      {incompleteLogsAll.length > 0 && (
+                        <div className="flex items-center justify-end gap-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setIncompletePage((p) => Math.max(1, p - 1))}
+                            disabled={incompletePage <= 1}
+                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Anterior
+                          </button>
+                          <span className="text-xs text-muted-foreground">
+                            Pagina {incompletePage} de {incompleteTotalPages}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setIncompletePage((p) => Math.min(incompleteTotalPages, p + 1))
                             }
-                      }
-                      onSendToAttorney={
-                        isReadyToSendToAttorney(l)
-                          ? () => void sendToAcceptedAttorney(l)
-                          : undefined
-                      }
-                      sendingToAttorney={
-                        String(sendingToAttorneyCallId ?? "") === getRetellCallId(l)
-                      }
-                    />
-                  ))}
+                            disabled={incompletePage >= incompleteTotalPages}
+                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Siguiente
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
 
-                <Separator />
-
-                {/* ========================= */}
-                {/* 3️⃣ CASOS MANUALES */}
-                {/* ========================= */}
-                <div className="space-y-4">
+                <div className="space-y-4 rounded-xl border border-border/60 p-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                    <button
+                      type="button"
+                      onClick={() => setOpenManualSection((v) => !v)}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300"
+                    >
+                      {openManualSection ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
                       Casos manuales
-                    </h3>
+                    </button>
                     <span className="inline-flex min-w-9 items-center justify-center rounded-full bg-muted px-3 py-1 text-lg font-bold text-foreground">
                       {manualLogsAll.length}
                     </span>
                   </div>
 
-                  {manualLogsAll.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
-                      No hay casos manuales.
-                    </div>
-                  )}
+                  {openManualSection && (
+                    <>
+                      {manualLogsAll.length === 0 && (
+                        <div className="rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
+                          No hay casos manuales.
+                        </div>
+                      )}
 
-                  {manualLogsAll.map((l: any) => (
-                    <CallCard
-                      key={l.id}
-                      call={l}
-                      onView={() => {
-                        setSelected(l);
-                        setOpen(true);
-                      }}
-                      onAssign={
-                        String(l?.status ?? "").toLowerCase() === "asignada"
-                          ? undefined
-                          : () => {
-                              setSelected(l);
-                              setAssignOpen(true);
-                            }
-                      }
-                      onSendToAttorney={
-                        isReadyToSendToAttorney(l)
-                          ? () => void sendToAcceptedAttorney(l)
-                          : undefined
-                      }
-                      sendingToAttorney={
-                        String(sendingToAttorneyCallId ?? "") === getRetellCallId(l)
-                      }
-                    />
-                  ))}
+                      {manualLogs.map((l: any) => (
+                        <CallCard
+                          key={l.id}
+                          call={l}
+                          onView={() => {
+                            setSelected(l);
+                            setOpen(true);
+                          }}
+                          onAssign={
+                            String(l?.status ?? "").toLowerCase() === "asignada"
+                              ? undefined
+                              : () => {
+                                  setSelected(l);
+                                  setAssignOpen(true);
+                                }
+                          }
+                          onSendToAttorney={
+                            isReadyToSendToAttorney(l)
+                              ? () => void sendToAcceptedAttorney(l)
+                              : undefined
+                          }
+                          sendingToAttorney={
+                            String(sendingToAttorneyCallId ?? "") === getRetellCallId(l)
+                          }
+                        />
+                      ))}
+
+                      {manualLogsAll.length > 0 && (
+                        <div className="flex items-center justify-end gap-3 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setManualPage((p) => Math.max(1, p - 1))}
+                            disabled={manualPage <= 1}
+                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Anterior
+                          </button>
+                          <span className="text-xs text-muted-foreground">
+                            Pagina {manualPage} de {manualTotalPages}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setManualPage((p) => Math.min(manualTotalPages, p + 1))}
+                            disabled={manualPage >= manualTotalPages}
+                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            Siguiente
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -1062,15 +1250,14 @@ export default function CallLogs() {
 
           setSelected(null);
 
-          // âœ… Si venÃ­a de una pantalla, volver a esa
+          // ✅ Si venía de una pantalla, volver a esa
           if (fromUrl) {
             setLocation(fromUrl);
             return;
           }
 
-          // Si no hay from, quedarse en la ruta actual sin query params
-          const currentPath = window.location.pathname;
-          setLocation(currentPath);
+          // Si no hay from, quedarse en /calls limpiando query params
+          clearCallQueryParams();
 
 
         }}
@@ -1131,22 +1318,22 @@ export default function CallLogs() {
 
                     {!intake && (
                       <div className="text-muted-foreground">
-                        Cargando información del formulario...
+                        Cargando informaci�n del formulario...
                       </div>
                     )}
 
                     {intake && (
                       <div className="space-y-6">
 
-                        {/* INFORMACIÓN DEL CLIENTE */}
+                        {/* INFORMACI�N DEL CLIENTE */}
                         <div className="rounded-xl border border-border/60 p-4 bg-muted/20">
                           <div className="text-sm font-semibold mb-3">
-                            Información del cliente
+                            Informaci�n del cliente
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             <Field label="Nombre" value={intake.data?.name} />
-                            <Field label="Teléfono" value={intake.data?.phone} />
+                            <Field label="Tel�fono" value={intake.data?.phone} />
                           </div>
                         </div>
 
@@ -1171,7 +1358,7 @@ export default function CallLogs() {
                           </div>
 
                           <div className="text-sm whitespace-pre-wrap">
-                            {intake.data?.narrative || "—"}
+                            {intake.data?.narrative || "�"}
                           </div>
                         </div>
 
@@ -1209,7 +1396,7 @@ export default function CallLogs() {
                         <CardTitle className="text-base">Resumen</CardTitle>
                       </CardHeader>
                       <CardContent className="text-sm text-foreground/80 leading-relaxed">
-                        {selected.summary ?? selected.analysis?.call_summary ?? "Sin resumen (aÃºn)."}
+                        {selected.summary ?? selected.analysis?.call_summary ?? "Sin resumen (aún)."}
                       </CardContent>
                     </Card>
                   </TabsContent>
@@ -1236,7 +1423,7 @@ export default function CallLogs() {
 
                       <CardContent>
                         <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-sm whitespace-pre-wrap leading-relaxed">
-                          {selected.transcript ?? "Sin transcripciÃ³n (aÃºn)."}
+                          {selected.transcript ?? "Sin transcripción (aún)."}
                         </div>
                       </CardContent>
                     </Card>
@@ -1257,14 +1444,14 @@ export default function CallLogs() {
                               <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                                 <div className="text-xs text-muted-foreground">Sentimiento</div>
                                 <div className="font-medium">
-                                  {selected.analysis?.user_sentiment ?? "â€”"}
+                                  {selected.analysis?.user_sentiment ?? "—"}
                                 </div>
                               </div>
 
                               <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                                 <div className="text-xs text-muted-foreground">Exitosa</div>
                                 <div className="font-medium">
-                                  {String(selected.analysis?.call_successful ?? "â€”")}
+                                  {String(selected.analysis?.call_successful ?? "—")}
                                 </div>
                               </div>
                             </div>
@@ -1272,7 +1459,7 @@ export default function CallLogs() {
                             <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                               <div className="text-xs text-muted-foreground mb-2">Resumen IA</div>
                               <div className="leading-relaxed text-foreground/80">
-                                {selected.analysis?.call_summary ?? "â€”"}
+                                {selected.analysis?.call_summary ?? "—"}
                               </div>
                             </div>
 
@@ -1280,7 +1467,7 @@ export default function CallLogs() {
 
                               <div className="flex items-center justify-between">
                                 <div className="text-sm font-semibold">
-                                  Datos básicos del caso
+                                  Datos b�sicos del caso
                                 </div>
 
                                 {!isEditingBasic ? (
@@ -1306,7 +1493,7 @@ export default function CallLogs() {
                               {!isEditingBasic ? (
                                 <div className="space-y-3 text-sm">
                                   <Field label="Correo" value={caseDetails.email} />
-                                  <Field label="Dirección" value={caseDetails.address} />
+                                  <Field label="Direcci�n" value={caseDetails.address} />
                                   <Field label="Notas importantes" value={caseDetails.caseNotes} />
                                 </div>
                               ) : (
@@ -1330,7 +1517,7 @@ export default function CallLogs() {
 
                                     <div className="space-y-1">
                                       <label className="text-xs text-muted-foreground">
-                                        Dirección
+                                        Direcci�n
                                       </label>
                                       <input
                                         type="text"
@@ -1371,7 +1558,7 @@ export default function CallLogs() {
 
                           <div className="flex items-center justify-between">
                             <div className="text-sm font-semibold">
-                              Información adicional
+                              Informaci�n adicional
                             </div>
 
                             {!isEditingExtra ? (
@@ -1398,7 +1585,7 @@ export default function CallLogs() {
                             <div className="space-y-3 text-sm">
                               {extraFields.length === 0 && (
                                 <div className="text-muted-foreground">
-                                  No hay información adicional.
+                                  No hay informaci�n adicional.
                                 </div>
                               )}
 
@@ -1504,7 +1691,7 @@ export default function CallLogs() {
                 </div>
               ) : null}
 
-              {attorneysLoading && <div className="text-muted-foreground">Cargando abogadosâ€¦</div>}
+              {attorneysLoading && <div className="text-muted-foreground">Cargando abogados…</div>}
               {attorneysError && <div className="text-destructive">Error: {attorneysError}</div>}
 
               {!attorneysLoading && !attorneysError && attorneys.length === 0 && (
@@ -1648,8 +1835,20 @@ export default function CallLogs() {
                       setAttorneyToAssign(null);
                       setAssignmentNotes("");
                       await refetchCallLogs();
+                      toast({
+                        title: "Solicitud enviada",
+                        description: "El caso fue enviado al abogado para su decision.",
+                        className: "border-emerald-200 bg-emerald-50 text-emerald-900",
+                      });
                     } catch (e: any) {
-                      alert(e?.message ?? "Error enviando solicitud al abogado");
+                      toast({
+                        variant: "destructive",
+                        title: "Error enviando solicitud",
+                        description: getErrorMessage(
+                          e,
+                          "No se pudo enviar la solicitud al abogado"
+                        ),
+                      });
                     } finally {
                       setAssigning(false);
                     }
@@ -1668,3 +1867,6 @@ export default function CallLogs() {
   );
 
 }
+
+
+

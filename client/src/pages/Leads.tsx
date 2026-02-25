@@ -52,6 +52,15 @@ function normalizeLeadStatus(status?: string | null) {
     return "asignada";
   }
 
+  if (
+    s === "finalizado" ||
+    s === "finalizada" ||
+    s === "finalized" ||
+    s === "closed"
+  ) {
+    return "finalizado";
+  }
+
   return s;
 }
 
@@ -78,6 +87,14 @@ function statusBadge(status?: string | null) {
     return (
       <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
         Asignada
+      </Badge>
+    );
+  }
+
+  if (normalized === "finalizado") {
+    return (
+      <Badge className="bg-slate-200 text-slate-800 hover:bg-slate-200">
+        Finalizado
       </Badge>
     );
   }
@@ -156,6 +173,7 @@ export default function Leads() {
                 <SelectItem value="pendiente">Pendiente</SelectItem>
                 <SelectItem value="en_espera_aceptacion">En revisión</SelectItem>
                 <SelectItem value="asignada">Asignada</SelectItem>
+                <SelectItem value="finalizado">Finalizado</SelectItem>
 
               </SelectContent>
             </Select>

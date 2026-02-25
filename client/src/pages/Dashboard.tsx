@@ -5,7 +5,6 @@ import {
   Clock,
   Search,
   UserCheck,
-  XCircle,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
@@ -34,18 +33,22 @@ function AdminAgentDashboardView({ role }: { role: "admin" | "agent" }) {
   const [aiOpen, setAiOpen] = useState(false);
   const isAdmin = role === "admin";
 
-  const pendientes = (callLogs || []).filter(
-    (c: any) => c.status === "pendiente" || c.status === "rechazada_por_abogado"
-  ).length;
+  const pendientes = (callLogs || []).filter((c: any) => {
+    const status = String(c?.status ?? "").toLowerCase();
+    return status === "pendiente" || status === "rechazada_por_abogado";
+  }).length;
 
-  const enEspera = (callLogs || []).filter(
-    (c: any) =>
-      c.status === "en_espera_aceptacion" ||
-      c.status === "pendiente_aprobacion_abogado"
-  ).length;
+  const enEspera = (callLogs || []).filter((c: any) => {
+    const status = String(c?.status ?? "").toLowerCase();
+    return status === "en_espera_aceptacion" || status === "pendiente_aprobacion_abogado";
+  }).length;
 
   const asignadas = (callLogs || []).filter(
-    (c: any) => c.status === "asignada"
+    (c: any) => String(c?.status ?? "").toLowerCase() === "asignada"
+  ).length;
+
+  const finalizados = (callLogs || []).filter(
+    (c: any) => String(c?.status ?? "").toLowerCase() === "finalizado"
   ).length;
 
   const [search, setSearch] = useState("");
@@ -98,57 +101,72 @@ function AdminAgentDashboardView({ role }: { role: "admin" | "agent" }) {
           </div>
         </header>
 
-        <div
-          className={`grid grid-cols-1 sm:grid-cols-2 ${
-            isAdmin ? "lg:grid-cols-4" : "lg:grid-cols-1"
-          } gap-4 md:gap-6 mb-8`}
-        >
-          <StatsCard
-            title="Total Leads"
-            value={stats?.totalLeads ?? 0}
-            icon={<Phone className="h-6 w-6" />}
-            isLoading={statsLoading}
-            subtitle="+12% from last month"
-            trend={{ value: 12, isPositive: true }}
-          />
-          {isAdmin ? (
-            <>
-              <StatsCard
-                title="Qualified"
-                value={stats?.qualifiedLeads ?? 0}
-                icon={<CheckCircle className="h-6 w-6" />}
-                isLoading={statsLoading}
-                subtitle={`${
-                  stats?.totalLeads
-                    ? Math.round(((stats.qualifiedLeads || 0) / stats.totalLeads) * 100)
-                    : 0
-                }% of total`}
-              />
-              <StatsCard
-                title="Converted"
-                value={stats?.convertedLeads ?? 0}
-                icon={<TrendingUp className="h-6 w-6" />}
-                isLoading={statsLoading}
-                subtitle={`${
-                  stats?.qualifiedLeads
-                    ? Math.round(((stats.convertedLeads || 0) / stats.qualifiedLeads) * 100)
-                    : 0
-                }% conversion rate`}
-              />
-              <StatsCard
-                title="Avg Response"
-                value={`${stats?.avgResponseTimeMinutes ?? 0}m`}
-                icon={<Clock className="h-6 w-6" />}
-                isLoading={statsLoading}
-                subtitle="Response time average"
-                trend={{ value: -5, isPositive: true }}
-              />
-            </>
-          ) : null}
-        </div>
+        {isAdmin ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+            <StatsCard
+              title="Total Leads"
+              value={stats?.totalLeads ?? 0}
+              icon={<Phone className="h-6 w-6" />}
+              isLoading={statsLoading}
+              subtitle="+12% from last month"
+              trend={{ value: 12, isPositive: true }}
+            />
+            <StatsCard
+              title="Qualified"
+              value={stats?.qualifiedLeads ?? 0}
+              icon={<CheckCircle className="h-6 w-6" />}
+              isLoading={statsLoading}
+              subtitle={`${
+                stats?.totalLeads
+                  ? Math.round(((stats.qualifiedLeads || 0) / stats.totalLeads) * 100)
+                  : 0
+              }% of total`}
+            />
+            <StatsCard
+              title="Converted"
+              value={stats?.convertedLeads ?? 0}
+              icon={<TrendingUp className="h-6 w-6" />}
+              isLoading={statsLoading}
+              subtitle={`${
+                stats?.qualifiedLeads
+                  ? Math.round(((stats.convertedLeads || 0) / stats.qualifiedLeads) * 100)
+                  : 0
+              }% conversion rate`}
+            />
+            <StatsCard
+              title="Avg Response"
+              value={`${stats?.avgResponseTimeMinutes ?? 0}m`}
+              icon={<Clock className="h-6 w-6" />}
+              isLoading={statsLoading}
+              subtitle="Response time average"
+              trend={{ value: -5, isPositive: true }}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-8">
+            <StatsCard
+              title="Total Leads"
+              value={stats?.totalLeads ?? 0}
+              icon={<Phone className="h-6 w-6" />}
+              isLoading={statsLoading}
+              subtitle="+12% from last month"
+              trend={{ value: 12, isPositive: true }}
+            />
+            <StatsCard
+              title="En espera de aceptacion"
+              value={enEspera}
+              icon={<Clock className="h-6 w-6 text-blue-500" />}
+              subtitle="Enviadas al abogado"
+            />
+          </div>
+        )}
         
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-8">
+        <div
+          className={`grid grid-cols-1 sm:grid-cols-3 ${
+            isAdmin ? "lg:grid-cols-4" : "lg:grid-cols-3"
+          } gap-4 md:gap-6 mb-8`}
+        >
           <StatsCard
             title="Llamadas Pendientes"
             value={pendientes}
@@ -156,18 +174,27 @@ function AdminAgentDashboardView({ role }: { role: "admin" | "agent" }) {
             subtitle="Requieren revision"
           />
 
-          <StatsCard
-            title="En espera de aceptacion"
-            value={enEspera}
-            icon={<Clock className="h-6 w-6 text-blue-500" />}
-            subtitle="Enviadas al abogado"
-          />
+          {isAdmin ? (
+            <StatsCard
+              title="En espera de aceptacion"
+              value={enEspera}
+              icon={<Clock className="h-6 w-6 text-blue-500" />}
+              subtitle="Enviadas al abogado"
+            />
+          ) : null}
 
           <StatsCard
             title="Asignadas"
             value={asignadas}
             icon={<CheckCircle className="h-6 w-6 text-green-500" />}
             subtitle="Ya asignadas en CRM"
+          />
+
+          <StatsCard
+            title="Finalizados"
+            value={finalizados}
+            icon={<CheckCircle className="h-6 w-6 text-slate-500" />}
+            subtitle="Casos cerrados"
           />
         </div>
 
@@ -281,8 +308,8 @@ function AdminAgentDashboardView({ role }: { role: "admin" | "agent" }) {
 }
 
 function AttorneyDashboardView() {
-  const { data: stats, isLoading: statsLoading } = useStats();
   const { data: callLogs, isLoading: logsLoading } = useCallLogs();
+  const [search, setSearch] = useState("");
 
   const byStatus = useMemo(() => {
     const rows = (callLogs || []) as any[];
@@ -294,30 +321,108 @@ function AttorneyDashboardView() {
       assigned: rows.filter(
         (c) => String(c?.status ?? "").toLowerCase() === "asignada"
       ).length,
-      rejected: rows.filter(
-        (c) => String(c?.status ?? "").toLowerCase() === "rechazada_por_abogado"
+      finalized: rows.filter(
+        (c) => String(c?.status ?? "").toLowerCase() === "finalizado"
       ).length,
     };
   }, [callLogs]);
+
+  const attorneyLeads = useMemo<Lead[]>(() => {
+    const rows = (callLogs || []) as any[];
+    const seenCallKeys = new Set<string>();
+    const seenIds = new Set<number>();
+
+    return rows.reduce<Lead[]>((acc, call, index) => {
+      const callKey = String(
+        call?.retellCallId ?? call?.call_id ?? call?.callId ?? call?.id ?? `attorney-call-${index + 1}`
+      ).trim() || `attorney-call-${index + 1}`;
+
+      if (seenCallKeys.has(callKey)) return acc;
+      seenCallKeys.add(callKey);
+
+      let numericId = Number(call?.leadId);
+      if (!Number.isFinite(numericId) || numericId <= 0 || seenIds.has(numericId)) {
+        numericId = index + 1;
+        while (seenIds.has(numericId)) numericId += 1;
+      }
+      seenIds.add(numericId);
+
+      const createdAtCandidate = call?.createdAt ? new Date(call.createdAt) : null;
+      const createdAt =
+        createdAtCandidate && !Number.isNaN(createdAtCandidate.getTime())
+          ? createdAtCandidate
+          : null;
+
+      acc.push({
+        id: numericId,
+        name: String(call?.leadName ?? call?.name ?? "Cliente"),
+        phone: String(call?.phoneNumber ?? call?.phone ?? "Sin numero"),
+        caseType: String(call?.caseType ?? "General"),
+        urgency: String(call?.urgency ?? call?.priority ?? "Low"),
+        status: String(call?.status ?? "asignada").toLowerCase(),
+        attorneyId: String(call?.attorneyId ?? call?.pendingAttorneyId ?? ""),
+        retellCallId: callKey,
+        summary: typeof call?.summary === "string" ? call.summary : undefined,
+        transcript: typeof call?.transcript === "string" ? call.transcript : undefined,
+        lastContactedAt: createdAt,
+        createdAt,
+      });
+
+      return acc;
+    }, []);
+  }, [callLogs]);
+
+  const filteredAttorneyLeads = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return attorneyLeads;
+
+    return attorneyLeads.filter((lead) => {
+      const haystack = [
+        lead.name,
+        lead.phone,
+        lead.caseType,
+        lead.urgency,
+        lead.status,
+        lead.summary,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(q);
+    });
+  }, [attorneyLeads, search]);
 
   return (
     <div className="min-h-screen bg-background text-foreground flex">
       <Sidebar />
 
       <main className="flex-1 md:ml-64 p-4 md:p-8 animate-in">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
-            Estadisticas de tus casos y llamadas asignadas.
-          </p>
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground mt-1">
+              Estadisticas de tus casos y llamadas asignadas.
+            </p>
+          </div>
+
+          <div className="relative hidden md:block">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar casos..."
+              className="pl-9 pr-4 py-2 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all w-64"
+            />
+          </div>
         </header>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
           <StatsCard
             title="Total casos"
-            value={stats?.totalLeads ?? 0}
+            value={byStatus.total}
             icon={<Phone className="h-6 w-6" />}
-            isLoading={statsLoading}
+            isLoading={logsLoading}
             subtitle="Relacionados a tu cuenta"
           />
           <StatsCard
@@ -335,13 +440,19 @@ function AttorneyDashboardView() {
             subtitle="Casos aceptados"
           />
           <StatsCard
-            title="Rechazadas"
-            value={byStatus.rejected}
-            icon={<XCircle className="h-6 w-6 text-rose-500" />}
+            title="Finalizados"
+            value={byStatus.finalized}
+            icon={<CheckCircle className="h-6 w-6 text-slate-500" />}
             isLoading={logsLoading}
-            subtitle="No aceptadas"
+            subtitle="Casos cerrados"
           />
         </div>
+
+        <LeadsTable
+          leads={filteredAttorneyLeads}
+          isLoading={logsLoading}
+          callLogsPath="/attorney-call"
+        />
         
       </main>
     </div>

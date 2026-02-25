@@ -2,18 +2,22 @@ import { query } from "./_generated/server";
 import { v } from "convex/values";
 
 export async function nextId(ctx: any, name: string): Promise<number> {
-  const existing = await ctx.db
+  const rows = await ctx.db
     .query("counters")
     .withIndex("by_name", (q: any) => q.eq("name", name))
-    .unique();
+    .collect();
 
-  if (!existing) {
+  if (!rows.length) {
     await ctx.db.insert("counters", { name, value: 1 });
     return 1;
   }
 
-  const next = existing.value + 1;
-  await ctx.db.patch(existing._id, { value: next });
+  // If legacy duplicates exist, keep incrementing the highest value.
+  const canonical = rows.reduce((best: any, row: any) =>
+    Number(row?.value ?? 0) > Number(best?.value ?? 0) ? row : best
+  );
+  const next = Number(canonical?.value ?? 0) + 1;
+  await ctx.db.patch(canonical._id, { value: next });
   return next;
 }
 

@@ -129,9 +129,7 @@ function isFinalEvent(e: string) {
 function mapStatusFromAnalysis(
   analysis: any
 ): "pendiente" | "en_espera_aceptacion" | "asignada" {
-  if (analysis?.call_successful === true) return "asignada";
-  if (analysis?.user_sentiment === "Positive")
-    return "en_espera_aceptacion";
+  // New calls must always enter as pending. Assignment flow updates this later.
   return "pendiente";
 }
 
@@ -234,9 +232,9 @@ function callLogMatchesAttorney(log: any, attorneyId: string): boolean {
   if (!cleanAttorneyId) return false;
   const status = safeString((log as any)?.status).toLowerCase();
   const assignmentStatus = safeString((log as any)?.assignmentStatus).toLowerCase();
-  const assignedAttorneyId = safeString(log?.attorneyId).trim();
-  if (status !== "asignada") return false;
-  if (assignmentStatus !== "delivered") return false;
+  const assignedAttorneyId = safeString(log?.attorneyId || log?.pendingAttorneyId).trim();
+  if (status !== "asignada" && status !== "finalizado") return false;
+  if (assignmentStatus !== "delivered" && assignmentStatus !== "closed") return false;
   return assignedAttorneyId === cleanAttorneyId;
 }
 
@@ -246,7 +244,10 @@ function computeDashboardStatsFromLeads(leads: any[]) {
     (l) => safeString((l as any)?.status).toLowerCase() === "en_espera_aceptacion"
   ).length;
   const convertedLeads = leads.filter(
-    (l) => safeString((l as any)?.status).toLowerCase() === "asignada"
+    (l) => {
+      const status = safeString((l as any)?.status).toLowerCase();
+      return status === "asignada" || status === "finalizado";
+    }
   ).length;
   const diffs = leads
     .map((l) =>
@@ -1373,15 +1374,16 @@ ${JSON.stringify(callsData, null, 2)}
 
       const assignedLogs = logs
         .filter((l: any) => {
-          const logStatus = String(l?.status ?? "").toLowerCase();
-          const logAttorneyId = String(l?.attorneyId ?? "");
-          const assignmentStatus = String((l as any)?.assignmentStatus ?? "").toLowerCase();
-
-          const isAssignedForAttorney =
-            logStatus === "asignada" &&
-            assignmentStatus === "delivered" &&
-            !!logAttorneyId &&
-            (!attorneyId || logAttorneyId === attorneyId);
+          const isAssignedForAttorney = attorneyId
+            ? callLogMatchesAttorney(l, attorneyId)
+            : (() => {
+                const logStatus = String(l?.status ?? "").toLowerCase();
+                const assignmentStatus = String((l as any)?.assignmentStatus ?? "").toLowerCase();
+                return (
+                  (logStatus === "asignada" || logStatus === "finalizado") &&
+                  (assignmentStatus === "delivered" || assignmentStatus === "closed")
+                );
+              })();
 
           if (!isAssignedForAttorney) return false;
 
@@ -1402,6 +1404,66 @@ ${JSON.stringify(callsData, null, 2)}
       return res
         .status(500)
         .json({ message: err?.message ?? "Failed to fetch assigned call" });
+    }
+  });
+
+  app.post("/api/attorney/close-case", async (req: any, res) => {
+    try {
+      const retellCallId = safeString(req.body?.retellCallId).trim();
+      if (!retellCallId) {
+        return res.status(400).json({ message: "retellCallId es obligatorio" });
+      }
+
+      const role = normalizeUserRole(req.user?.role) ?? "agent";
+      if (role !== "abogado" && role !== "admin") {
+        return res.status(403).json({ message: "No autorizado" });
+      }
+
+      const call = await storage.getCallLogByRetellCallId(retellCallId);
+      if (!call) {
+        return res.status(404).json({ message: "Call no encontrada" });
+      }
+
+      const currentStatus = safeString((call as any)?.status).toLowerCase();
+      if (currentStatus !== "asignada" && currentStatus !== "finalizado") {
+        return res
+          .status(400)
+          .json({ message: "Solo puedes cerrar casos activos asignados" });
+      }
+
+      const callAttorneyId = safeString(
+        (call as any)?.attorneyId || (call as any)?.pendingAttorneyId
+      ).trim();
+
+      if (role === "abogado") {
+        const resolvedAttorneyId = await resolveAttorneyIdForUser(req.user);
+        if (!resolvedAttorneyId) {
+          return res.status(403).json({ message: "No encuentro tu perfil de abogado" });
+        }
+        if (callAttorneyId && callAttorneyId !== resolvedAttorneyId) {
+          return res.status(403).json({ message: "Este caso no esta asignado para ti" });
+        }
+      }
+
+      const leadId = Number((call as any)?.leadId ?? 0);
+      if (!Number.isFinite(leadId) || leadId <= 0) {
+        return res.status(400).json({ message: "La llamada no tiene leadId valido" });
+      }
+
+      if (currentStatus !== "finalizado") {
+        await storage.updateLead(leadId, { status: "finalizado" } as any);
+      }
+
+      const updated = await storage.updateCallLogByRetellCallId(retellCallId, {
+        status: "finalizado",
+        assignmentStatus: "closed",
+      } as any);
+
+      return res.json({ success: true, call: updated });
+    } catch (err: any) {
+      return res
+        .status(500)
+        .json({ message: err?.message ?? "Failed to close case" });
     }
   });
 
@@ -1591,7 +1653,7 @@ if (!recordingUrl && retellCallDetails) {
       ]);
       const webhookStatus = protectedStatuses.has(existingStatus)
         ? existingStatus
-        : "ended";
+        : "pendiente";
 
       await storage.updateCallLogByRetellCallId(callId, {
         retellCallId: callId,
