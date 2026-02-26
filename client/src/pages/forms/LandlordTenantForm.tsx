@@ -4,11 +4,14 @@ import ComplianceSection from "@/components/intake/ComplianceSection";
 import DeadlinesSection from "@/components/intake/DeadlinesSection";
 import ConflictSection from "@/components/intake/ConflictSection";
 import EvidenceSection from "@/components/intake/EvidenceSection";
+import { ManualLeadClientInfoSection, ManualLeadSaveButton, useManualLeadSubmit } from "./manualLeadUtils";
 
 export default function LandlordTenantForm() {
   const [formData, setFormData] = useState<any>({});
   const handleChange = (n: string, v: any) =>
     setFormData((p: any) => ({ ...p, [n]: v }));
+
+  const { isSubmitting, handleSubmit } = useManualLeadSubmit("Landlord-Tenant");
 
   return (
     <div className="max-w-5xl mx-auto space-y-12 pb-16">
@@ -19,6 +22,8 @@ export default function LandlordTenantForm() {
           Capture dispute type and housing details.
         </p>
       </div>
+
+      <ManualLeadClientInfoSection onChange={handleChange} />
 
       <SectionWrapper title="Case Details">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -64,10 +69,9 @@ export default function LandlordTenantForm() {
       <EvidenceSection practice="landlord-tenant" onChange={handleChange} />
 
       <div className="flex justify-end">
-        <button className="bg-blue-600 text-white px-10 py-3 rounded-xl">
-          Save Lead
-        </button>
+        <ManualLeadSaveButton isSubmitting={isSubmitting} onClick={() => handleSubmit(formData)} />
       </div>
     </div>
   );
 }
+

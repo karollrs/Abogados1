@@ -27,6 +27,21 @@ function pickFirstString(...values: any[]): string | undefined {
   return undefined;
 }
 
+function pickFirstByKeyFragments(
+  source: any,
+  fragments: string[]
+): string | undefined {
+  if (!source || typeof source !== "object") return undefined;
+  for (const [rawKey, rawValue] of Object.entries(source)) {
+    if (typeof rawValue !== "string" || !rawValue.trim()) continue;
+    const key = String(rawKey).toLowerCase();
+    if (fragments.some((fragment) => key.includes(fragment))) {
+      return rawValue.trim();
+    }
+  }
+  return undefined;
+}
+
 function hasOwn(obj: any, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 }
@@ -597,7 +612,7 @@ ${JSON.stringify(callsData, null, 2)}
         return res.status(404).json({ message: "Call log no encontrado" });
       }
 
-      const updates: Record<string, string> = {};
+      const updates: Record<string, any> = {};
       const mapField = (key: string) => {
         if (hasOwn(req.body, key)) {
           updates[key] = safeString(req.body?.[key]).trim();
@@ -614,6 +629,26 @@ ${JSON.stringify(callsData, null, 2)}
       mapField("location");
       mapField("caseType");
       mapField("caseNotes");
+      if (
+        hasOwn(req.body, "extraFields") &&
+        Array.isArray(req.body?.extraFields)
+      ) {
+        updates.extraFields = req.body.extraFields
+          .map((item: any) => ({
+            label: safeString(item?.label).trim(),
+            value: safeString(item?.value).trim(),
+          }))
+          .filter((item: any) => item.label || item.value);
+      }
+
+      if (!updates.location) {
+        const fallbackLocation = [updates.city, updates.stateProvince]
+          .filter((value) => safeString(value).trim().length > 0)
+          .join(", ");
+        if (fallbackLocation) {
+          updates.location = fallbackLocation;
+        }
+      }
 
       if (!Object.keys(updates).length) {
         return res.status(400).json({ message: "No hay campos para actualizar" });
@@ -624,12 +659,20 @@ ${JSON.stringify(callsData, null, 2)}
         updates as any
       );
 
-      if (hasOwn(updates, "caseType")) {
-        const leadId = Number((updatedCall as any)?.leadId ?? 0);
-        if (Number.isFinite(leadId) && leadId > 0) {
-          await storage.updateLead(leadId, {
-            caseType: updates.caseType,
-          } as any);
+      const leadId = Number((updatedCall as any)?.leadId ?? 0);
+      if (Number.isFinite(leadId) && leadId > 0) {
+        const leadPatch: any = {};
+        if (hasOwn(updates, "caseType")) {
+          leadPatch.caseType = updates.caseType;
+        }
+        if (hasOwn(updates, "email")) {
+          leadPatch.email = updates.email;
+        }
+        if (hasOwn(updates, "city")) {
+          leadPatch.city = updates.city;
+        }
+        if (Object.keys(leadPatch).length > 0) {
+          await storage.updateLead(leadId, leadPatch);
         }
       }
 
@@ -1652,26 +1695,43 @@ if (!recordingUrl && retellCallDetails) {
       const city =
         pickFirstString(
           cad.city,
+          cad.ciudad,
+          cad.residence_city,
+          cad.residenceCity,
           postData.city,
+          postData.ciudad,
           analysis.city,
+          pickFirstByKeyFragments(cad, ["city", "ciudad", "residence", "residencia"]),
+          pickFirstByKeyFragments(postData, ["city", "ciudad", "residence", "residencia"]),
           (existingCall as any)?.city
         ) ?? "";
       const stateProvince =
         pickFirstString(
           cad.state,
+          cad.estado,
           cad.state_province,
+          cad.province,
+          cad.residence_state,
           postData.state,
+          postData.estado,
           postData.state_province,
           analysis.state,
           analysis.state_province,
+          pickFirstByKeyFragments(cad, ["state", "estado", "province", "provincia"]),
+          pickFirstByKeyFragments(postData, ["state", "estado", "province", "provincia"]),
           (existingCall as any)?.stateProvince
         ) ?? "";
       const location =
         pickFirstString(
           cad.location,
           cad.ubicacion,
+          cad.residence,
+          cad.residencia,
           postData.location,
+          postData.ubicacion,
           analysis.location,
+          pickFirstByKeyFragments(cad, ["location", "ubicacion", "residence", "residencia"]),
+          pickFirstByKeyFragments(postData, ["location", "ubicacion", "residence", "residencia"]),
           [city, stateProvince].filter(Boolean).join(", ")
         ) ?? "";
       const email =
@@ -1680,6 +1740,8 @@ if (!recordingUrl && retellCallDetails) {
           cad.correo,
           postData.email,
           analysis.email,
+          pickFirstByKeyFragments(cad, ["email", "correo"]),
+          pickFirstByKeyFragments(postData, ["email", "correo"]),
           (existingCall as any)?.email
         ) ?? "";
       const address =
@@ -1689,13 +1751,21 @@ if (!recordingUrl && retellCallDetails) {
           postData.address,
           postData.direccion,
           analysis.address,
+          pickFirstByKeyFragments(cad, ["address", "direccion", "street"]),
+          pickFirstByKeyFragments(postData, ["address", "direccion", "street"]),
           (existingCall as any)?.address
         ) ?? "";
       const caseType =
         pickFirstString(
           cad.case_type,
+          cad.caseType,
+          cad.tipo_caso,
           postData.case_type,
+          postData.caseType,
           analysis.case_type,
+          analysis.caseType,
+          pickFirstByKeyFragments(cad, ["case", "caso", "practice", "matter"]),
+          pickFirstByKeyFragments(postData, ["case", "caso", "practice", "matter"]),
           (existingCall as any)?.caseType
         ) ?? "";
 

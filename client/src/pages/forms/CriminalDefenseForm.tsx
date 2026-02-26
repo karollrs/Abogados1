@@ -5,6 +5,7 @@ import ComplianceSection from "@/components/intake/ComplianceSection";
 import DeadlinesSection from "@/components/intake/DeadlinesSection";
 import ConflictSection from "@/components/intake/ConflictSection";
 import EvidenceSection from "@/components/intake/EvidenceSection";
+import { ManualLeadClientInfoSection, ManualLeadSaveButton, useManualLeadSubmit } from "./manualLeadUtils";
 
 export default function CriminalDefenseForm() {
   const [formData, setFormData] = useState<any>({});
@@ -15,6 +16,8 @@ export default function CriminalDefenseForm() {
       [name]: value,
     }));
   };
+
+  const { isSubmitting, handleSubmit } = useManualLeadSubmit("Criminal Defense");
 
   return (
     <div className="max-w-5xl mx-auto space-y-12 pb-16">
@@ -30,6 +33,8 @@ export default function CriminalDefenseForm() {
       </div>
 
       {/* CASE DETAILS */}
+      <ManualLeadClientInfoSection onChange={handleChange} />
+
       <SectionWrapper title="Case Details">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -64,7 +69,7 @@ export default function CriminalDefenseForm() {
               className="input-modern"
               onChange={(e) => handleChange("inCustody", e.target.value)}
             >
-              <option value="">—</option>
+              <option value="">-</option>
               <option>Yes</option>
               <option>No</option>
             </select>
@@ -101,11 +106,11 @@ export default function CriminalDefenseForm() {
 
       {/* SAVE BUTTON */}
       <div className="flex justify-end pt-4">
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-3 rounded-xl font-semibold shadow-sm transition">
-          Save Lead
-        </button>
+        <ManualLeadSaveButton isSubmitting={isSubmitting} onClick={() => handleSubmit(formData)} />
       </div>
 
     </div>
   );
 }
+
+

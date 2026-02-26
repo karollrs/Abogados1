@@ -46,6 +46,15 @@ async function findLeadByNumericId(ctx: any, id: number) {
   return matches.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
 }
 
+function firstNonEmptyString(...values: any[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
 /* LIST LEADS */
 export const list = query({
   args: { search: v.optional(v.string()), status: v.optional(v.string()) },
@@ -208,12 +217,58 @@ export const createManualLead = mutation({
     const callLogId = await nextId(ctx, "callLogs");
     const now = Date.now();
     const manualRetellCallId = `manual-${newId}-${now}`;
+    const data = args.data ?? {};
+
+    const city = firstNonEmptyString(
+      data.city,
+      data.clientCity,
+      data.residenceCity
+    );
+    const stateProvince = firstNonEmptyString(
+      data.stateProvince,
+      data.state,
+      data.state_province,
+      data.residenceState
+    );
+    const location = firstNonEmptyString(
+      data.location,
+      data.ubicacion,
+      [city, stateProvince].filter(Boolean).join(", ")
+    );
+    const email = firstNonEmptyString(data.email, data.correo);
+    const address = firstNonEmptyString(data.address, data.direccion);
+    const caseType = firstNonEmptyString(
+      data.caseType,
+      data.case_type,
+      args.practiceArea
+    );
+    const urgency = firstNonEmptyString(
+      data.urgency,
+      data.urgencyLevel,
+      data.priority
+    );
+    const summary = firstNonEmptyString(
+      data.summary,
+      data.narrative,
+      data.caseNotes,
+      data.deadlineNotes
+    );
+    const caseNotes = firstNonEmptyString(
+      data.caseNotes,
+      data.deadlineNotes,
+      data.narrative
+    );
 
     // 1) Crear lead
     await ctx.db.insert("leads", {
       id: newId,
       name: args.name,
       phone: args.phone,
+      ...(email ? { email } : {}),
+      ...(city ? { city } : {}),
+      ...(caseType ? { caseType } : {}),
+      ...(urgency ? { urgency } : {}),
+      ...(summary ? { summary } : {}),
       practiceArea: args.practiceArea,
       source: "manual",
       status: "pendiente",
@@ -236,6 +291,15 @@ export const createManualLead = mutation({
       retellCallId: manualRetellCallId,
       status: "pendiente",
       direction: "manual",
+      phoneNumber: args.phone,
+      ...(summary ? { summary } : {}),
+      ...(city ? { city } : {}),
+      ...(stateProvince ? { stateProvince } : {}),
+      ...(location ? { location } : {}),
+      ...(email ? { email } : {}),
+      ...(address ? { address } : {}),
+      ...(caseType ? { caseType } : {}),
+      ...(caseNotes ? { caseNotes } : {}),
       createdAt: now,
     });
 

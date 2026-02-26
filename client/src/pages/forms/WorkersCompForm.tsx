@@ -5,6 +5,7 @@ import ComplianceSection from "@/components/intake/ComplianceSection";
 import DeadlinesSection from "@/components/intake/DeadlinesSection";
 import ConflictSection from "@/components/intake/ConflictSection";
 import EvidenceSection from "@/components/intake/EvidenceSection";
+import { ManualLeadClientInfoSection, ManualLeadSaveButton, useManualLeadSubmit } from "./manualLeadUtils";
 
 export default function WorkersCompForm() {
   const [formData, setFormData] = useState<any>({});
@@ -16,13 +17,15 @@ export default function WorkersCompForm() {
     }));
   };
 
+  const { isSubmitting, handleSubmit } = useManualLeadSubmit("Workers Compensation");
+
   return (
     <div className="max-w-5xl mx-auto space-y-12 pb-16">
 
       {/* HEADER */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">
-          Workers’ Compensation Intake
+          Workers Compensation Intake
         </h1>
         <p className="text-gray-500 mt-2">
           Capture employment details and workplace injury information.
@@ -30,6 +33,8 @@ export default function WorkersCompForm() {
       </div>
 
       {/* CASE DETAILS */}
+      <ManualLeadClientInfoSection onChange={handleChange} />
+
       <SectionWrapper title="Case Details">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -41,7 +46,7 @@ export default function WorkersCompForm() {
               className="input-modern"
               onChange={(e) => handleChange("employmentStatus", e.target.value)}
             >
-              <option value="">—</option>
+              <option value="">-</option>
               <option>Employed</option>
               <option>Unemployed</option>
               <option>Independent contractor</option>
@@ -56,7 +61,7 @@ export default function WorkersCompForm() {
               className="input-modern"
               onChange={(e) => handleChange("onTheJob", e.target.value)}
             >
-              <option value="">—</option>
+              <option value="">-</option>
               <option>Yes</option>
               <option>No</option>
             </select>
@@ -70,7 +75,7 @@ export default function WorkersCompForm() {
               className="input-modern"
               onChange={(e) => handleChange("reportedToEmployer", e.target.value)}
             >
-              <option value="">—</option>
+              <option value="">-</option>
               <option>Yes</option>
               <option>No</option>
             </select>
@@ -119,11 +124,11 @@ export default function WorkersCompForm() {
 
       {/* SAVE BUTTON */}
       <div className="flex justify-end pt-4">
-        <button className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-3 rounded-xl font-semibold shadow-sm transition">
-          Save Lead
-        </button>
+        <ManualLeadSaveButton isSubmitting={isSubmitting} onClick={() => handleSubmit(formData)} />
       </div>
 
     </div>
   );
 }
+
+

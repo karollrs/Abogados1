@@ -1,7 +1,6 @@
 import { Sidebar } from "@/components/Sidebar";
 import { useRoute, useLocation } from "wouter";
 
-// Formularios especificos
 import PersonalInjuryForm from "@/pages/forms/PersonalInjuryForm";
 import WorkersCompForm from "@/pages/forms/WorkersCompForm";
 import ImmigrationForm from "@/pages/forms/ImmigrationForm";
@@ -15,6 +14,21 @@ import RealEstateForm from "./forms/RealEstateForm";
 import SSDIForm from "./forms/SSDIForm";
 import ProbateForm from "./forms/ProbateForm";
 
+const PRACTICE_AREAS = [
+  "personal-injury",
+  "workers-comp",
+  "immigration",
+  "criminal-defense",
+  "family-law",
+  "bankruptcy",
+  "landlord-tenant",
+  "employment",
+  "medical-malpractice",
+  "real-estate",
+  "ssdi",
+  "probate",
+];
+
 export default function ManualLeadForm() {
   const [match, params] = useRoute("/leads/new-manual/:practiceArea");
   const [, navigate] = useLocation();
@@ -24,10 +38,10 @@ export default function ManualLeadForm() {
   const practiceArea = params.practiceArea;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex">
       <Sidebar />
 
-      <main className="md:pl-64 min-h-screen">
+      <main className="flex-1 md:ml-64 min-h-screen">
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-12">
           <div className="flex justify-end mb-4">
             <button
@@ -51,23 +65,8 @@ export default function ManualLeadForm() {
           {practiceArea === "ssdi" && <SSDIForm />}
           {practiceArea === "probate" && <ProbateForm />}
 
-          {![
-            "personal-injury",
-            "workers-comp",
-            "immigration",
-            "criminal-defense",
-            "family-law",
-            "bankruptcy",
-            "landlord-tenant",
-            "employment",
-            "medical-malpractice",
-            "real-estate",
-            "ssdi",
-            "probate",
-          ].includes(practiceArea) && (
-            <div className="text-red-600 text-xl font-semibold">
-              Invalid Practice Area
-            </div>
+          {!PRACTICE_AREAS.includes(practiceArea) && (
+            <div className="text-red-600 text-xl font-semibold">Invalid Practice Area</div>
           )}
         </div>
       </main>
