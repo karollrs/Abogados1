@@ -14,7 +14,7 @@ export default function ComplianceSection({ onChange }: Props) {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         <label className="flex items-center gap-3 text-sm text-gray-700">
           <input

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Bot, Send } from "lucide-react";
+import { withApiBase } from "@/lib/queryClient";
 
 export function AIAssistant() {
   const [messages, setMessages] = useState<
@@ -24,8 +25,9 @@ export function AIAssistant() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/ai-assistant", {
+      const res = await fetch(withApiBase("/api/ai-assistant"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: finalMessage }),
       });

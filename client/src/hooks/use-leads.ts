@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import { withApiBase } from "@/lib/queryClient";
 
 type RetellWebhookPayload = Record<string, unknown>;
 
@@ -18,7 +19,7 @@ export function useLeads(search?: string, status?: string) {
       ? `${api.leads.list.path}?${queryString}`
       : api.leads.list.path;
 
-    const res = await fetch(url, {
+    const res = await fetch(withApiBase(url), {
       credentials: "include",
       cache: "no-store",
     });
@@ -38,7 +39,7 @@ export function useLead(id: number) {
     queryKey: [api.leads.get.path, id],
     queryFn: async () => {
       const url = buildUrl(api.leads.get.path, { id });
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(withApiBase(url), { credentials: "include" });
       if (res.status === 404) return null;
       if (!res.ok) throw new Error("Failed to fetch lead");
       return api.leads.get.responses[200].parse(await res.json());
@@ -51,7 +52,7 @@ export function useUpdateLead() {
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: number } & Record<string, any>) => {
       const url = buildUrl(api.leads.update.path, { id });
-      const res = await fetch(url, {
+      const res = await fetch(withApiBase(url), {
         method: api.leads.update.method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -71,7 +72,7 @@ export function useStats() {
   return useQuery({
     queryKey: [api.leads.stats.path],
     queryFn: async () => {
-      const res = await fetch(api.leads.stats.path, { credentials: "include" });
+      const res = await fetch(withApiBase(api.leads.stats.path), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stats");
       return api.leads.stats.responses[200].parse(await res.json());
     },
@@ -83,7 +84,7 @@ export function useSimulateWebhook() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: RetellWebhookPayload) => {
-      const res = await fetch(api.webhooks.retell.path, {
+      const res = await fetch(withApiBase(api.webhooks.retell.path), {
         method: api.webhooks.retell.method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

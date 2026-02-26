@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { withApiBase } from "@/lib/queryClient";
 
 import { US_CITIES } from "@/hooks/usCities";
 import { CASE_TYPES } from "@/hooks/caseTypes";
@@ -60,7 +61,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     return (
       <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
         <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-        En espera de aceptación
+        En espera de aceptaciÃ³n
       </span>
     );
   }
@@ -94,7 +95,7 @@ function StatusBadge({ status }: { status?: string | null }) {
 
   return (
     <span className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-      {status ?? "—"}
+      {status ?? "â€”"}
     </span>
   );
 }
@@ -408,7 +409,7 @@ function Field({ label, value }: { label: string; value: any }) {
   return (
     <div className="space-y-1">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="font-medium">{value || "�"}</div>
+      <div className="font-medium">{value || "-"}</div>
     </div>
   );
 }
@@ -437,13 +438,13 @@ export default function CallLogs() {
   const { data: logs, isLoading, error, refetch: refetchCallLogs } = useCallLogs();
 
 
-  // ✅ Fuente REAL de query params (no falla)
+  // Fuente real de query params (no falla)
   const [searchStr, setSearchStr] = useState(() => window.location.search);
 
 
 
 
-  // ✅ Actualiza searchStr si cambia la URL (cuando navegas con wouter)
+  // Actualiza searchStr si cambia la URL (cuando navegas con wouter)
 
 
 
@@ -642,7 +643,7 @@ export default function CallLogs() {
   }, [manualLogsAll, manualPage]);
 
 
-  // ✅ Auto-open por phone
+  // Auto-open por phone
 
   useEffect(() => {
     if (!phoneFromUrl) return;
@@ -665,7 +666,7 @@ export default function CallLogs() {
     }
   }, [phoneFromUrl, logs, open]);
 
-  // ✅ Auto-open por callId
+  // Auto-open por callId
   useEffect(() => {
     if (!callIdFromUrl) return;
     if (!logs?.length) return;
@@ -682,7 +683,7 @@ export default function CallLogs() {
     }
   }, [callIdFromUrl, logs, open]);
 
-  // ✅ Cargar abogados cuando abres el modal asignar
+  // Cargar abogados cuando abres el modal asignar
   useEffect(() => {
     if (!assignOpen) return;
 
@@ -690,7 +691,9 @@ export default function CallLogs() {
       setAttorneysLoading(true);
       setAttorneysError(null);
       try {
-        const r = await fetch("/api/attorneys");
+        const r = await fetch(withApiBase("/api/attorneys"), {
+          credentials: "include",
+        });
         if (!r.ok) throw new Error(await r.text());
         const data = await r.json();
         setAttorneys(Array.isArray(data) ? data : []);
@@ -819,9 +822,10 @@ export default function CallLogs() {
     try {
       setSendingToAttorneyCallId(retellCallId);
       const r = await fetch(
-        `/api/call-logs/${encodeURIComponent(retellCallId)}/send-to-attorney`,
+        withApiBase(`/api/call-logs/${encodeURIComponent(retellCallId)}/send-to-attorney`),
         {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({}),
         }
@@ -861,9 +865,10 @@ export default function CallLogs() {
       };
 
       const response = await fetch(
-        `/api/call-logs/${encodeURIComponent(selectedRetellCallId)}/details`,
+        withApiBase(`/api/call-logs/${encodeURIComponent(selectedRetellCallId)}/details`),
         {
           method: "PATCH",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }
@@ -928,7 +933,7 @@ export default function CallLogs() {
               <input
                 list="us-cities"
                 type="text"
-                placeholder="Escribe una ciudad…"
+                placeholder="Escribe una ciudadâ€¦"
                 value={cityText}
                 onChange={(e) => setCityText(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -947,7 +952,7 @@ export default function CallLogs() {
               <input
                 list="case-types"
                 type="text"
-                placeholder="Escribe un tipo de caso…"
+                placeholder="Escribe un tipo de casoâ€¦"
                 value={caseTypeText}
                 onChange={(e) => setCaseTypeText(e.target.value)}
                 className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -974,7 +979,7 @@ export default function CallLogs() {
             </CardHeader>
 
             <CardContent className="pt-0">
-              {isLoading && <div className="text-muted-foreground">Cargando�</div>}
+              {isLoading && <div className="text-muted-foreground">Cargandoâ€¦</div>}
 
               {error && (
                 <div className="text-destructive">
@@ -1250,7 +1255,7 @@ export default function CallLogs() {
 
           setSelected(null);
 
-          // ✅ Si venía de una pantalla, volver a esa
+          // Si venia de una pantalla, volver a esa
           if (fromUrl) {
             setLocation(fromUrl);
             return;
@@ -1318,22 +1323,22 @@ export default function CallLogs() {
 
                     {!intake && (
                       <div className="text-muted-foreground">
-                        Cargando informaci�n del formulario...
+                        Cargando informaciÃ³n del formulario...
                       </div>
                     )}
 
                     {intake && (
                       <div className="space-y-6">
 
-                        {/* INFORMACI�N DEL CLIENTE */}
+                        {/* INFORMACIÃ“N DEL CLIENTE */}
                         <div className="rounded-xl border border-border/60 p-4 bg-muted/20">
                           <div className="text-sm font-semibold mb-3">
-                            Informaci�n del cliente
+                            InformaciÃ³n del cliente
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             <Field label="Nombre" value={intake.data?.name} />
-                            <Field label="Tel�fono" value={intake.data?.phone} />
+                            <Field label="TelÃ©fono" value={intake.data?.phone} />
                           </div>
                         </div>
 
@@ -1358,7 +1363,7 @@ export default function CallLogs() {
                           </div>
 
                           <div className="text-sm whitespace-pre-wrap">
-                            {intake.data?.narrative || "�"}
+                            {intake.data?.narrative || "â€”"}
                           </div>
                         </div>
 
@@ -1396,7 +1401,7 @@ export default function CallLogs() {
                         <CardTitle className="text-base">Resumen</CardTitle>
                       </CardHeader>
                       <CardContent className="text-sm text-foreground/80 leading-relaxed">
-                        {selected.summary ?? selected.analysis?.call_summary ?? "Sin resumen (aún)."}
+                        {selected.summary ?? selected.analysis?.call_summary ?? "Sin resumen (aÃºn)."}
                       </CardContent>
                     </Card>
                   </TabsContent>
@@ -1423,7 +1428,7 @@ export default function CallLogs() {
 
                       <CardContent>
                         <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-sm whitespace-pre-wrap leading-relaxed">
-                          {selected.transcript ?? "Sin transcripción (aún)."}
+                          {selected.transcript ?? "Sin transcripciÃ³n (aÃºn)."}
                         </div>
                       </CardContent>
                     </Card>
@@ -1444,14 +1449,14 @@ export default function CallLogs() {
                               <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                                 <div className="text-xs text-muted-foreground">Sentimiento</div>
                                 <div className="font-medium">
-                                  {selected.analysis?.user_sentiment ?? "—"}
+                                  {selected.analysis?.user_sentiment ?? "â€”"}
                                 </div>
                               </div>
 
                               <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                                 <div className="text-xs text-muted-foreground">Exitosa</div>
                                 <div className="font-medium">
-                                  {String(selected.analysis?.call_successful ?? "—")}
+                                  {String(selected.analysis?.call_successful ?? "â€”")}
                                 </div>
                               </div>
                             </div>
@@ -1459,7 +1464,7 @@ export default function CallLogs() {
                             <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                               <div className="text-xs text-muted-foreground mb-2">Resumen IA</div>
                               <div className="leading-relaxed text-foreground/80">
-                                {selected.analysis?.call_summary ?? "—"}
+                                {selected.analysis?.call_summary ?? "â€”"}
                               </div>
                             </div>
 
@@ -1467,7 +1472,7 @@ export default function CallLogs() {
 
                               <div className="flex items-center justify-between">
                                 <div className="text-sm font-semibold">
-                                  Datos b�sicos del caso
+                                  Datos bÃ¡sicos del caso
                                 </div>
 
                                 {!isEditingBasic ? (
@@ -1493,7 +1498,7 @@ export default function CallLogs() {
                               {!isEditingBasic ? (
                                 <div className="space-y-3 text-sm">
                                   <Field label="Correo" value={caseDetails.email} />
-                                  <Field label="Direcci�n" value={caseDetails.address} />
+                                  <Field label="DirecciÃ³n" value={caseDetails.address} />
                                   <Field label="Notas importantes" value={caseDetails.caseNotes} />
                                 </div>
                               ) : (
@@ -1517,7 +1522,7 @@ export default function CallLogs() {
 
                                     <div className="space-y-1">
                                       <label className="text-xs text-muted-foreground">
-                                        Direcci�n
+                                        DirecciÃ³n
                                       </label>
                                       <input
                                         type="text"
@@ -1558,7 +1563,7 @@ export default function CallLogs() {
 
                           <div className="flex items-center justify-between">
                             <div className="text-sm font-semibold">
-                              Informaci�n adicional
+                              InformaciÃ³n adicional
                             </div>
 
                             {!isEditingExtra ? (
@@ -1585,7 +1590,7 @@ export default function CallLogs() {
                             <div className="space-y-3 text-sm">
                               {extraFields.length === 0 && (
                                 <div className="text-muted-foreground">
-                                  No hay informaci�n adicional.
+                                  No hay informaciÃ³n adicional.
                                 </div>
                               )}
 
@@ -1691,7 +1696,7 @@ export default function CallLogs() {
                 </div>
               ) : null}
 
-              {attorneysLoading && <div className="text-muted-foreground">Cargando abogados…</div>}
+              {attorneysLoading && <div className="text-muted-foreground">Cargando abogados...</div>}
               {attorneysError && <div className="text-destructive">Error: {attorneysError}</div>}
 
               {!attorneysLoading && !attorneysError && attorneys.length === 0 && (
@@ -1819,7 +1824,8 @@ export default function CallLogs() {
                     try {
                       setAssigning(true);
                       const leadIdForAssign = selectedLeadId ?? 0;
-                      const r = await fetch(`/api/leads/${leadIdForAssign}/assign-attorney`, {
+                      const r = await fetch(withApiBase(`/api/leads/${leadIdForAssign}/assign-attorney`), {
+                        credentials: "include",
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
@@ -1867,6 +1873,7 @@ export default function CallLogs() {
   );
 
 }
+
 
 
 

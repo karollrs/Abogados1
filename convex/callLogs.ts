@@ -20,6 +20,46 @@ async function findLeadByNumericId(ctx: any, id: number) {
   return matches.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
 }
 
+function normalizeLeadStatusFromCallStatus(status: unknown): string {
+  const s = String(status ?? "").trim().toLowerCase();
+
+  if (!s || s === "new" || s === "pending" || s === "pendiente") {
+    return "pendiente";
+  }
+
+  if (
+    s === "en_espera_aceptacion" ||
+    s === "en espera de aceptacion" ||
+    s === "en revision" ||
+    s === "en_revision" ||
+    s === "review" ||
+    s === "in_review" ||
+    s === "pendiente_aprobacion_abogado"
+  ) {
+    return "en_espera_aceptacion";
+  }
+
+  if (s === "asignada" || s === "assigned") {
+    return "asignada";
+  }
+
+  if (
+    s === "finalizado" ||
+    s === "finalizada" ||
+    s === "finalized" ||
+    s === "closed"
+  ) {
+    return "finalizado";
+  }
+
+  // Rejected attorney decisions return the lead to pending for reassignment.
+  if (s === "rechazada_por_abogado" || s === "rejected") {
+    return "pendiente";
+  }
+
+  return s;
+}
+
 /* ============================================================
    LISTAR CALL LOGS
 ============================================================ */
@@ -203,7 +243,7 @@ export const upsertByRetellCallId = mutation({
 
         if (lead) {
           await ctx.db.patch(lead._id, {
-            status: normalizedUpdates.status,
+            status: normalizeLeadStatusFromCallStatus(normalizedUpdates.status),
           });
         }
       }
@@ -241,7 +281,9 @@ export const upsertByRetellCallId = mutation({
 
         if (lead) {
           await ctx.db.patch(lead._id, {
-            status: normalizedUpdates.status ?? "pendiente",
+            status: normalizeLeadStatusFromCallStatus(
+              normalizedUpdates.status ?? "pendiente"
+            ),
           });
         }
       }

@@ -34,11 +34,11 @@ export default function NewManualLead() {
   const [, setLocation] = useLocation();
 
   return (
-    <>
+    <div className="min-h-screen bg-gray-50">
       <Sidebar />
 
-      <div className="ml-64 bg-gray-50 min-h-screen flex justify-center">
-        <div className="w-full max-w-6xl px-10 py-12">
+      <main className="md:pl-64 min-h-screen flex justify-center">
+        <div className="w-full max-w-6xl px-4 sm:px-6 lg:px-10 py-8 sm:py-10 lg:py-12">
 
           {/* Header */}
           <div className="mb-10 text-center">
@@ -51,9 +51,9 @@ export default function NewManualLead() {
           </div>
 
           {/* Card Container */}
-          <div className="bg-white border rounded-3xl p-10 shadow-sm">
+          <div className="bg-white border rounded-3xl p-4 sm:p-6 lg:p-10 shadow-sm">
 
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {practiceAreas.map((area) => {
                 const Icon = area.icon;
 
@@ -76,7 +76,7 @@ export default function NewManualLead() {
 
           </div>
         </div>
-      </div>
-    </>
+      </main>
+    </div>
   );
 }

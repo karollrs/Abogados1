@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { withApiBase } from "@/lib/queryClient";
 
 export type Attorney = {
   id: string | number;
@@ -39,7 +40,9 @@ export function useAttorneys(filters: Filters) {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch(`/api/attorneys${query}`);
+      const r = await fetch(withApiBase(`/api/attorneys${query}`), {
+        credentials: "include",
+      });
       if (!r.ok) throw new Error(await r.text());
       const json = await r.json();
       setData(json);

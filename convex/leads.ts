@@ -2,7 +2,6 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { nextId } from "./helpers";
 
-
 function normalizeLeadStatus(value: unknown): string {
   const s = String(value ?? "").trim().toLowerCase();
 
@@ -47,20 +46,35 @@ async function findLeadByNumericId(ctx: any, id: number) {
   return matches.sort((a: any, b: any) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
 }
 
-/* ============================= */
 /* LIST LEADS */
-/* ============================= */
-
 export const list = query({
   args: { search: v.optional(v.string()), status: v.optional(v.string()) },
   handler: async (ctx, { search, status }) => {
     const rows = await ctx.db.query("leads").collect();
+    const callLogs = await ctx.db.query("callLogs").collect();
+
+    const latestRetellByLeadId = new Map<number, { retellCallId: string; createdAt: number }>();
+    for (const log of callLogs) {
+      const leadId = Number((log as any)?.leadId ?? 0);
+      const retellCallId = String((log as any)?.retellCallId ?? "").trim();
+      if (!Number.isFinite(leadId) || leadId <= 0 || !retellCallId) continue;
+
+      const createdAt = Number((log as any)?.createdAt ?? 0);
+      const current = latestRetellByLeadId.get(leadId);
+      if (!current || createdAt >= current.createdAt) {
+        latestRetellByLeadId.set(leadId, { retellCallId, createdAt });
+      }
+    }
 
     const statusFilter = status ? normalizeLeadStatus(status) : undefined;
 
     const normalizedRows = rows.map((l) => ({
       ...l,
       status: normalizeLeadStatus(l.status),
+      retellCallId:
+        String((l as any)?.retellCallId ?? "").trim() ||
+        latestRetellByLeadId.get(Number((l as any)?.id ?? 0))?.retellCallId ||
+        undefined,
     }));
 
     const s = (search ?? "").toLowerCase().trim();
@@ -84,10 +98,7 @@ export const list = query({
   },
 });
 
-/* ============================= */
 /* CREATE LEAD */
-/* ============================= */
-
 export const create = mutation({
   args: {
     name: v.string(),
@@ -113,10 +124,7 @@ export const create = mutation({
   },
 });
 
-/* ============================= */
 /* GET LEAD */
-/* ============================= */
-
 export const get = query({
   args: { id: v.number() },
   handler: async (ctx, { id }) => {
@@ -124,10 +132,7 @@ export const get = query({
   },
 });
 
-/* ============================= */
 /* UPDATE LEAD */
-/* ============================= */
-
 export const update = mutation({
   args: {
     id: v.number(),
@@ -141,10 +146,17 @@ export const update = mutation({
     const allowed = [
       "name",
       "phone",
+      "practiceArea",
+      "source",
+      "email",
+      "city",
+      "age",
       "caseType",
       "urgency",
       "status",
       "attorneyId",
+      "retellCallId",
+      "retellAgentId",
       "summary",
       "transcript",
       "lastContactedAt",
@@ -157,15 +169,16 @@ export const update = mutation({
       }
     }
 
+    if (patch.status !== undefined) {
+      patch.status = normalizeLeadStatus(patch.status);
+    }
+
     await ctx.db.patch(lead._id, patch);
     return await ctx.db.get(lead._id);
   },
 });
 
-/* ============================= */
 /* ASSIGN ATTORNEY */
-/* ============================= */
-
 export const assignAttorney = mutation({
   args: { id: v.number(), attorneyId: v.string() },
   handler: async (ctx, { id, attorneyId }) => {
@@ -194,8 +207,9 @@ export const createManualLead = mutation({
     const newId = await nextId(ctx, "leads");
     const callLogId = await nextId(ctx, "callLogs");
     const now = Date.now();
+    const manualRetellCallId = `manual-${newId}-${now}`;
 
-    // 1️⃣ Crear Lead (solo campos válidos del schema)
+    // 1) Crear lead
     await ctx.db.insert("leads", {
       id: newId,
       name: args.name,
@@ -203,10 +217,11 @@ export const createManualLead = mutation({
       practiceArea: args.practiceArea,
       source: "manual",
       status: "pendiente",
+      retellCallId: manualRetellCallId,
       createdAt: now,
     });
 
-    // 2️⃣ Guardar intake en tabla correcta
+    // 2) Guardar intake
     await ctx.db.insert("intakes", {
       leadId: newId,
       practiceArea: args.practiceArea,
@@ -214,11 +229,11 @@ export const createManualLead = mutation({
       createdAt: now,
     });
 
-    // 3️⃣ Crear CallLog compatible con schema
+    // 3) Crear call log
     await ctx.db.insert("callLogs", {
       id: callLogId,
       leadId: newId,
-      retellCallId: `manual-${newId}-${now}`,
+      retellCallId: manualRetellCallId,
       status: "pendiente",
       direction: "manual",
       createdAt: now,

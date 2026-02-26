@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 
 import SectionWrapper from "@/components/intake/SectionWrapper";
 import ComplianceSection from "@/components/intake/ComplianceSection";
@@ -10,7 +10,7 @@ import ConflictSection from "@/components/intake/ConflictSection";
 import EvidenceSection from "@/components/intake/EvidenceSection";
 
 export default function PersonalInjuryForm() {
-  const navigate = useNavigate();
+  const [, navigate] = useLocation();
   const createManualLead = useMutation(api.leads.createManualLead);
 
   const [formData, setFormData] = useState<any>({});
@@ -65,7 +65,7 @@ export default function PersonalInjuryForm() {
 
       {/* BASIC CLIENT INFO */}
       <SectionWrapper title="Client Information">
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           <div>
             <label className="block text-sm font-medium mb-2">
@@ -94,7 +94,7 @@ export default function PersonalInjuryForm() {
 
       {/* CASE DETAILS */}
       <SectionWrapper title="Case Details">
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           <div>
             <label className="block text-sm font-medium mb-2">
@@ -182,3 +182,4 @@ export default function PersonalInjuryForm() {
     </div>
   );
 }
+

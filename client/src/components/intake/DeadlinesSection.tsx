@@ -8,7 +8,7 @@ export default function DeadlinesSection({ onChange }: Props) {
   return (
     <SectionWrapper title="Deadlines & Events">
 
-      <div className="grid grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <input
           type="date"
           className="input-modern"

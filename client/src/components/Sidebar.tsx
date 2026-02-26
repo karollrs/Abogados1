@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import {
   LayoutDashboard,
   Users as UsersIcon,
@@ -24,15 +24,14 @@ const abogadoNavigation = [
 ];
 
 export function Sidebar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data: user } = useUser();
   const logout = useLogout();
-  const [, navigate] = useLocation();
 
   const handleLogout = async () => {
     try {
       await logout.mutateAsync();
-      navigate("/login");
+      setLocation("/login");
     } catch {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     }
@@ -70,25 +69,27 @@ export function Sidebar() {
         {navigation.map((item) => {
           const isActive = location === item.href;
           return (
-            <Link key={item.name} href={item.href}>
-              <div
-                className={`
+            <button
+              key={item.href}
+              type="button"
+              onClick={() => setLocation(item.href)}
+              className={`
+                  w-full text-left
                   group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer
                   ${isActive
                     ? "bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }
                 `}
-              >
-                <item.icon
-                  className={`h-5 w-5 transition-colors ${isActive
+            >
+              <item.icon
+                className={`h-5 w-5 transition-colors ${isActive
                       ? "text-primary"
                       : "text-muted-foreground group-hover:text-foreground"
                     }`}
-                />
-                {item.name}
-              </div>
-            </Link>
+              />
+              {item.name}
+            </button>
           );
         })}
       </div>

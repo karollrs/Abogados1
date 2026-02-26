@@ -28,15 +28,6 @@ export default function App() {
       {/* Público */}
       <Route path="/login" component={Login} />
 
-      {/* Privado */}
-      <ProtectedRoute
-        path="/"
-        component={Dashboard}
-        allowedRoles={["admin", "agent", "abogado"]}
-      />
-
-
-
       <ProtectedRoute
         path="/calls"
         component={CallLogs}
@@ -75,6 +66,13 @@ export default function App() {
         path="/leads"
         component={Leads}
         allowedRoles={["admin", "agent"]}
+      />
+
+      {/* Privado */}
+      <ProtectedRoute
+        path="/"
+        component={Dashboard}
+        allowedRoles={["admin", "agent", "abogado"]}
       />
 
 

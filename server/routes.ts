@@ -147,6 +147,43 @@ function normalizeUserRole(v: any): "admin" | "agent" | "abogado" | null {
   return null;
 }
 
+function normalizeCrmStatus(v: any): string {
+  const s = String(v ?? "")
+    .toLowerCase()
+    .trim();
+
+  if (!s || s === "new" || s === "pending" || s === "pendiente") {
+    return "pendiente";
+  }
+
+  if (
+    s === "en_espera_aceptacion" ||
+    s === "en espera de aceptacion" ||
+    s === "en revision" ||
+    s === "en_revision" ||
+    s === "review" ||
+    s === "in_review" ||
+    s === "pendiente_aprobacion_abogado"
+  ) {
+    return "en_espera_aceptacion";
+  }
+
+  if (s === "asignada" || s === "assigned") {
+    return "asignada";
+  }
+
+  if (
+    s === "finalizado" ||
+    s === "finalizada" ||
+    s === "finalized" ||
+    s === "closed"
+  ) {
+    return "finalizado";
+  }
+
+  return s;
+}
+
 function normalizeEmail(v: any): string {
   return safeString(v).toLowerCase().trim();
 }
@@ -731,6 +768,46 @@ ${JSON.stringify(callsData, null, 2)}
     const status = req.query.status as string | undefined;
     const leads = await storage.getLeads(search, status);
     res.json(leads);
+  });
+
+  app.get(api.leads.get.path, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ message: "leadId invalido" });
+    }
+
+    const lead = await storage.getLead(id);
+    if (!lead) {
+      return res.status(404).json({ message: "Lead no encontrado" });
+    }
+
+    return res.json(lead);
+  });
+
+  app.patch(api.leads.update.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id) || id <= 0) {
+        return res.status(400).json({ message: "leadId invalido" });
+      }
+
+      const existing = await storage.getLead(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Lead no encontrado" });
+      }
+
+      const updates: any = { ...(req.body ?? {}) };
+      if (hasOwn(updates, "status")) {
+        updates.status = normalizeCrmStatus(updates.status);
+      }
+
+      const updated = await storage.updateLead(id, updates);
+      return res.json(updated);
+    } catch (err: any) {
+      return res
+        .status(500)
+        .json({ message: err?.message ?? "Failed to update lead" });
+    }
   });
 
   app.get(api.leads.stats.path, async (req: any, res) => {
@@ -1650,6 +1727,9 @@ if (!recordingUrl && retellCallDetails) {
         "pendiente_aprobacion_abogado",
         "rechazada_por_abogado",
         "asignada",
+        "en_espera_aceptacion",
+        "finalizado",
+        "closed",
       ]);
       const webhookStatus = protectedStatuses.has(existingStatus)
         ? existingStatus

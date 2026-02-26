@@ -3,8 +3,7 @@ import express, { type Request, type Response, type NextFunction } from "express
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import "dotenv/config";
-import cors from "cors";
+import cors, { type CorsOptions } from "cors";
 import { setupAuth } from "./auth";
 
 
@@ -26,31 +25,51 @@ app.use(
   })
 );
 
-// 2) CORS (SOLO UNA VEZ)
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "https://abogados1.vercel.app",
-  "https://abogados1.vercel.app/" // opcional, por si acaso
-];
+const normalizeOrigin = (value: string): string => value.trim().replace(/\/+$/, "");
+const isLocalOrigin = (origin: string): boolean => {
+  try {
+    const parsed = new URL(origin);
+    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+};
 
-app.set("trust proxy", 1); // ✅ importante en Render (proxy HTTPS)
+const configuredOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.RENDER_EXTERNAL_URL,
+  ...(process.env.CORS_ORIGINS ?? "").split(","),
+]
+  .map((value) => normalizeOrigin(String(value ?? "")))
+  .filter(Boolean);
 
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "http://127.0.0.1:5173",
-      "https://abogados1.vercel.app", // ✅ tu Vercel exacto
-    ],
-    credentials: true,
-    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+const allowedOrigins = new Set<string>([
+  normalizeOrigin("http://localhost:5173"),
+  normalizeOrigin("http://127.0.0.1:5173"),
+  ...configuredOrigins,
+]);
 
-// ✅ Fuerza respuesta a preflight en todas las rutas
-app.options(/.*/, cors());
+const corsOptions: CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const normalized = normalizeOrigin(origin);
+    if (allowedOrigins.has(normalized)) return callback(null, true);
+    if (process.env.NODE_ENV !== "production" && isLocalOrigin(normalized)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS origin not allowed: ${origin}`));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
+app.set("trust proxy", 1); // importante en Render (proxy HTTPS)
+
+app.use(cors(corsOptions));
+
+// Fuerza respuesta a preflight en todas las rutas
+app.options(/.*/, cors(corsOptions));
 
 
 
@@ -133,3 +152,4 @@ res.json = (body: any) => {
     log(`serving on http://${host}:${port}`);
   });
 })();
+

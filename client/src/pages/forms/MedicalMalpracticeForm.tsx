@@ -15,7 +15,7 @@ export default function MedicalMalpracticeForm() {
       <h1 className="text-3xl font-bold">Medical Malpractice Intake</h1>
 
       <SectionWrapper title="Case Details">
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           <input className="input-modern"
             placeholder="Hospital / Provider"
@@ -24,7 +24,7 @@ export default function MedicalMalpracticeForm() {
           <input type="date" className="input-modern"
             onChange={e => handleChange("incidentDate", e.target.value)} />
 
-          <input className="input-modern col-span-2"
+          <input className="input-modern md:col-span-2"
             placeholder="Injury description"
             onChange={e => handleChange("injury", e.target.value)} />
 

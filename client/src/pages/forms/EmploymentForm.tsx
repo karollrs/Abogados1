@@ -15,7 +15,7 @@ export default function EmploymentForm() {
       <h1 className="text-3xl font-bold">Employment Intake</h1>
 
       <SectionWrapper title="Case Details">
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           <select className="input-modern"
             onChange={e => handleChange("issueType", e.target.value)}>
@@ -30,7 +30,7 @@ export default function EmploymentForm() {
             placeholder="Employer name"
             onChange={e => handleChange("employer", e.target.value)} />
 
-          <input className="input-modern col-span-2"
+          <input className="input-modern md:col-span-2"
             placeholder="Job title"
             onChange={e => handleChange("position", e.target.value)} />
 

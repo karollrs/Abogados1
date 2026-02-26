@@ -21,7 +21,7 @@ export default function LandlordTenantForm() {
       </div>
 
       <SectionWrapper title="Case Details">
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           <select className="input-modern"
             onChange={e => handleChange("role", e.target.value)}>
@@ -40,7 +40,7 @@ export default function LandlordTenantForm() {
           </select>
 
           <input
-            className="input-modern col-span-2"
+            className="input-modern md:col-span-2"
             placeholder="Property address"
             onChange={e => handleChange("address", e.target.value)}
           />

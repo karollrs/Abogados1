@@ -7,14 +7,18 @@ import { useLocation } from "wouter";
 const statusStyles = {
   pendiente: "bg-yellow-100 text-yellow-800 ring-yellow-600/20",
   en_espera_aceptacion: "bg-blue-100 text-blue-800 ring-blue-600/20",
+  pendiente_aprobacion_abogado: "bg-blue-100 text-blue-800 ring-blue-600/20",
   asignada: "bg-green-100 text-green-800 ring-green-600/20",
+  rechazada_por_abogado: "bg-red-100 text-red-800 ring-red-600/20",
   finalizado: "bg-slate-200 text-slate-800 ring-slate-500/20",
 };
 
 const statusLabels = {
   pendiente: "Pendiente",
-  en_espera_aceptacion: "En revisión",
+  en_espera_aceptacion: "En revision",
+  pendiente_aprobacion_abogado: "En revision",
   asignada: "Asignada",
+  rechazada_por_abogado: "Rechazada",
   finalizado: "Finalizado",
 };
 
@@ -34,7 +38,7 @@ interface LeadsTableProps {
 
 export function LeadsTable({ leads, isLoading, callLogsPath = "/calls" }: LeadsTableProps) {
 
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
 
   const ITEMS_PER_PAGE = 7;
   const [currentPage, setCurrentPage] = useState(1);
@@ -146,12 +150,17 @@ export function LeadsTable({ leads, isLoading, callLogsPath = "/calls" }: LeadsT
                         e.stopPropagation();
                         const callId = String(lead.retellCallId ?? "").trim();
                         const phone = lead.phone || "";
+                        const from = encodeURIComponent(location || "/");
                         if (callId) {
-                          navigate(`${callLogsPath}?callId=${encodeURIComponent(callId)}`);
+                          navigate(
+                            `${callLogsPath}?callId=${encodeURIComponent(callId)}&from=${from}`
+                          );
                           return;
                         }
 
-                        navigate(`${callLogsPath}?phone=${encodeURIComponent(phone)}`);
+                        navigate(
+                          `${callLogsPath}?phone=${encodeURIComponent(phone)}&from=${from}`
+                        );
 
                       }}
                       className="text-muted-foreground hover:text-primary transition-colors p-2 rounded-lg hover:bg-primary/5"
@@ -227,3 +236,4 @@ export function LeadsTable({ leads, isLoading, callLogsPath = "/calls" }: LeadsT
     </div>
   );
 }
+

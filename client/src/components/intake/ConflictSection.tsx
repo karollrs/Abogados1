@@ -8,7 +8,7 @@ export default function ConflictSection({ onChange }: Props) {
   return (
     <SectionWrapper title="Conflict Check">
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <input
           placeholder="Names / entities"
           className="input-modern"

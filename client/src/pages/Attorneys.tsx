@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { useAttorneys } from "@/hooks/use-attorneys";
+import { withApiBase } from "@/lib/queryClient";
 
 // ✅ Fallbacks por si aún no creaste los data files
 let CASE_TYPES_FALLBACK = [
@@ -73,8 +74,9 @@ export default function Attorneys() {
     if (!canSave) return;
     setSaving(true);
     try {
-      const r = await fetch("/api/attorneys", {
+      const r = await fetch(withApiBase("/api/attorneys"), {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,

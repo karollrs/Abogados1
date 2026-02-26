@@ -32,7 +32,7 @@ export const leadSchema = z.object({
 
   status: z.string(),
 
-  attorneyId: z.number().optional(),
+  attorneyId: z.string().optional(),
 
   retellCallId: z.string().optional(),
   retellAgentId: z.string().optional(),
