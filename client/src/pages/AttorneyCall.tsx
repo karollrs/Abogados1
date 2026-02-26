@@ -81,6 +81,38 @@ function firstText(...values: any[]): string {
   return "";
 }
 
+function getCallSummary(call: any): string {
+  return firstText(
+    call?.summary,
+    call?.analysis?.call_summary,
+    call?.analysis?.post_call_analysis?.call_summary
+  );
+}
+
+function getCallTranscript(call: any): string {
+  return firstText(call?.transcript, call?.analysis?.transcript);
+}
+
+function getAnalysisSentiment(call: any): string {
+  return (
+    firstText(
+      call?.analysis?.user_sentiment,
+      call?.analysis?.post_call_analysis?.user_sentiment,
+      call?.analysis?.sentiment,
+      call?.sentiment
+    ) || "-"
+  );
+}
+
+function getAnalysisSuccessLabel(call: any): string {
+  const successful =
+    call?.analysis?.call_successful ??
+    call?.analysis?.post_call_analysis?.call_successful;
+  if (successful === true) return "Yes";
+  if (successful === false) return "No";
+  return "-";
+}
+
 function getCallCity(call: any): string {
   return firstText(
     call?.city,
@@ -95,9 +127,313 @@ function getCallCity(call: any): string {
 function getCallCaseType(call: any): string {
   return firstText(
     call?.caseType,
+    call?.case_type,
     call?.analysis?.case_type,
+    call?.analysis?.caseType,
     call?.analysis?.post_call_data?.case_type,
     call?.analysis?.custom_analysis_data?.case_type
+  );
+}
+
+function getCallState(call: any): string {
+  return firstText(
+    call?.stateProvince,
+    call?.state,
+    call?.analysis?.state,
+    call?.analysis?.state_province,
+    call?.analysis?.post_call_data?.state,
+    call?.analysis?.post_call_data?.state_province,
+    call?.analysis?.custom_analysis_data?.state,
+    call?.analysis?.custom_analysis_data?.state_province
+  );
+}
+
+function getCallLocation(call: any): string {
+  return firstText(
+    call?.location,
+    call?.analysis?.location,
+    call?.analysis?.post_call_data?.location,
+    call?.analysis?.custom_analysis_data?.location,
+    call?.analysis?.custom_analysis_data?.ubicacion
+  );
+}
+
+function getCallEmail(call: any): string {
+  return firstText(
+    call?.email,
+    call?.leadEmail,
+    call?.analysis?.email,
+    call?.analysis?.post_call_data?.email,
+    call?.analysis?.custom_analysis_data?.email,
+    call?.analysis?.custom_analysis_data?.correo
+  );
+}
+
+function getCallAddress(call: any): string {
+  return firstText(
+    call?.address,
+    call?.analysis?.address,
+    call?.analysis?.post_call_data?.address,
+    call?.analysis?.custom_analysis_data?.address,
+    call?.analysis?.custom_analysis_data?.direccion
+  );
+}
+
+function getCallCaseNotes(call: any): string {
+  return firstText(call?.caseNotes);
+}
+
+function normalizeExtraFields(
+  value: any
+): Array<{ label: string; value: string }> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item: any) => ({
+      label: String(item?.label ?? "").trim(),
+      value: String(item?.value ?? "").trim(),
+    }))
+    .filter((item: any) => item.label || item.value);
+}
+
+function Field({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-medium">{String(value ?? "").trim() || "-"}</div>
+    </div>
+  );
+}
+
+function AttorneyCaseDetailsSection({
+  call,
+  onSaved,
+  toast,
+}: {
+  call: any;
+  onSaved: () => Promise<any>;
+  toast: (opts: any) => void;
+}) {
+  const [isEditingBasic, setIsEditingBasic] = useState(false);
+  const [isEditingExtra, setIsEditingExtra] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [caseDetails, setCaseDetails] = useState({
+    email: getCallEmail(call),
+    address: getCallAddress(call),
+    city: getCallCity(call),
+    stateProvince: getCallState(call),
+    location: getCallLocation(call),
+    caseType: getCallCaseType(call),
+    caseNotes: getCallCaseNotes(call),
+  });
+  const [extraFields, setExtraFields] = useState<Array<{ label: string; value: string }>>(
+    normalizeExtraFields(call?.extraFields)
+  );
+
+  useEffect(() => {
+    setIsEditingBasic(false);
+    setIsEditingExtra(false);
+    setCaseDetails({
+      email: getCallEmail(call),
+      address: getCallAddress(call),
+      city: getCallCity(call),
+      stateProvince: getCallState(call),
+      location: getCallLocation(call),
+      caseType: getCallCaseType(call),
+      caseNotes: getCallCaseNotes(call),
+    });
+    setExtraFields(normalizeExtraFields(call?.extraFields));
+  }, [call]);
+
+  const save = async () => {
+    const retellCallId = getCallKey(call);
+    if (!retellCallId) return;
+
+    try {
+      setSaving(true);
+      const response = await fetch(
+        withApiBase(`/api/call-logs/${encodeURIComponent(retellCallId)}/details`),
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            email: caseDetails.email.trim(),
+            address: caseDetails.address.trim(),
+            city: caseDetails.city.trim(),
+            stateProvince: caseDetails.stateProvince.trim(),
+            location: caseDetails.location.trim(),
+            caseType: caseDetails.caseType.trim(),
+            caseNotes: caseDetails.caseNotes.trim(),
+            extraFields,
+          }),
+        }
+      );
+      if (!response.ok) throw new Error(await response.text());
+      await onSaved();
+      toast({
+        title: "Datos actualizados",
+        description: "La informacion del caso se guardo correctamente.",
+        className: "border-emerald-200 bg-emerald-50 text-emerald-900",
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Error guardando datos",
+        description: getErrorMessage(err, "No se pudo guardar la informacion del caso"),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="rounded-2xl border border-border/60 bg-background p-4 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold">Datos basicos del caso</div>
+          {!isEditingBasic ? (
+            <button
+              onClick={() => setIsEditingBasic(true)}
+              className="text-xs bg-primary text-white px-3 py-1.5 rounded-lg"
+            >
+              Editar
+            </button>
+          ) : (
+            <button
+              onClick={async () => {
+                await save();
+                setIsEditingBasic(false);
+              }}
+              disabled={saving}
+              className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-60"
+            >
+              {saving ? "Guardando..." : "Guardar"}
+            </button>
+          )}
+        </div>
+
+        {!isEditingBasic ? (
+          <div className="space-y-3 text-sm">
+            <Field label="Correo" value={caseDetails.email} />
+            <Field label="Direccion" value={caseDetails.address} />
+            <Field label="Notas importantes" value={caseDetails.caseNotes} />
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Correo</label>
+                <input
+                  type="email"
+                  value={caseDetails.email}
+                  onChange={(e) =>
+                    setCaseDetails((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                  placeholder="cliente@email.com"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Direccion</label>
+                <input
+                  type="text"
+                  value={caseDetails.address}
+                  onChange={(e) =>
+                    setCaseDetails((prev) => ({ ...prev, address: e.target.value }))
+                  }
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                  placeholder="123 Main St"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Notas importantes del caso</label>
+              <textarea
+                value={caseDetails.caseNotes}
+                onChange={(e) =>
+                  setCaseDetails((prev) => ({ ...prev, caseNotes: e.target.value }))
+                }
+                className="w-full rounded-md border border-border px-3 py-2 text-sm min-h-[100px]"
+                placeholder="Detalles importantes para seguimiento..."
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-dashed border-border/70 p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold">Informacion adicional</div>
+          {!isEditingExtra ? (
+            <button
+              onClick={() => setIsEditingExtra(true)}
+              className="text-xs bg-primary text-white px-3 py-1.5 rounded-lg"
+            >
+              Editar
+            </button>
+          ) : (
+            <button
+              onClick={async () => {
+                await save();
+                setIsEditingExtra(false);
+              }}
+              disabled={saving}
+              className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-60"
+            >
+              {saving ? "Guardando..." : "Guardar"}
+            </button>
+          )}
+        </div>
+
+        {!isEditingExtra ? (
+          <div className="space-y-3 text-sm">
+            {extraFields.length === 0 && (
+              <div className="text-muted-foreground">No hay informacion adicional.</div>
+            )}
+            {extraFields.map((field, index) => (
+              <Field key={index} label={field.label} value={field.value} />
+            ))}
+          </div>
+        ) : (
+          <>
+            {extraFields.map((field, index) => (
+              <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  value={field.label}
+                  onChange={(e) => {
+                    const copy = [...extraFields];
+                    copy[index].label = e.target.value;
+                    setExtraFields(copy);
+                  }}
+                  className="rounded-md border border-border px-3 py-2 text-sm"
+                />
+                <input
+                  type="text"
+                  value={field.value}
+                  onChange={(e) => {
+                    const copy = [...extraFields];
+                    copy[index].value = e.target.value;
+                    setExtraFields(copy);
+                  }}
+                  className="rounded-md border border-border px-3 py-2 text-sm"
+                />
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setExtraFields((prev) => [...prev, { label: "", value: "" }])}
+              className="text-xs bg-muted px-3 py-1.5 rounded-lg hover:bg-muted/70"
+            >
+              + Agregar campo
+            </button>
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -356,7 +692,7 @@ export default function AttorneyCall() {
 
             <span className="flex items-center gap-1">
               <FileText className="h-4 w-4 opacity-60" />
-              {call.summary ? "Con resumen" : "Sin resumen"}
+              {getCallSummary(call) ? "Con resumen" : "Sin resumen"}
             </span>
           </div>
         </CardHeader>
@@ -384,7 +720,7 @@ export default function AttorneyCall() {
                   <CardTitle className="text-base">Resumen</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-foreground/80 leading-relaxed">
-                  {call.summary ?? call.analysis?.call_summary ?? "Sin resumen disponible."}
+                  {getCallSummary(call) || "Sin resumen disponible."}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -396,11 +732,11 @@ export default function AttorneyCall() {
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(call.transcript ?? "");
+                      navigator.clipboard.writeText(getCallTranscript(call));
                       setCopiedCallKey(callKey);
                       setTimeout(() => setCopiedCallKey(null), 1500);
                     }}
-                    disabled={!call.transcript}
+                    disabled={!getCallTranscript(call)}
                     className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 transition disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Copy className="h-4 w-4" />
@@ -410,7 +746,7 @@ export default function AttorneyCall() {
 
                 <CardContent>
                   <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 text-sm whitespace-pre-wrap leading-relaxed">
-                    {call.transcript ?? "Sin transcripcion disponible."}
+                    {getCallTranscript(call) || "Sin transcripcion disponible."}
                   </div>
                 </CardContent>
               </Card>
@@ -429,14 +765,14 @@ export default function AttorneyCall() {
                       <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                         <div className="text-xs text-muted-foreground">Sentimiento</div>
                         <div className="font-medium">
-                          {call.analysis?.user_sentiment ?? "-"}
+                          {getAnalysisSentiment(call)}
                         </div>
                       </div>
 
                       <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                         <div className="text-xs text-muted-foreground">Exitosa</div>
                         <div className="font-medium">
-                          {String(call.analysis?.call_successful ?? "-")}
+                          {getAnalysisSuccessLabel(call)}
                         </div>
                       </div>
                     </div>
@@ -444,9 +780,17 @@ export default function AttorneyCall() {
                     <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                       <div className="text-xs text-muted-foreground mb-2">Resumen IA</div>
                       <div className="leading-relaxed text-foreground/80">
-                        {call.analysis?.call_summary ?? "-"}
+                        {getCallSummary(call) || "-"}
                       </div>
                     </div>
+
+                    <AttorneyCaseDetailsSection
+                      call={call}
+                      onSaved={async () => {
+                        await refetch();
+                      }}
+                      toast={toast}
+                    />
                   </div>
                 </CardContent>
               </Card>
