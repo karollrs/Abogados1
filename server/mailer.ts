@@ -3,8 +3,7 @@ import nodemailer from "nodemailer";
 
 type AssignmentEmail = {
   to: string;
-  leadName: string;
-  leadPhone: string;
+  leadName?: string | null;
   caseType: string | null;
   urgency: string | null;
   summary?: string | null;
@@ -17,8 +16,6 @@ type AssignmentDecisionEmail = {
   decision: "accept" | "reject";
   attorneyName?: string | null;
   attorneyEmail?: string | null;
-  leadName?: string | null;
-  leadPhone?: string | null;
   caseType?: string | null;
   notes?: string | null;
 };
@@ -39,6 +36,34 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripLeadNameFromSummary(summary: string, leadName?: string | null): string {
+  const cleanedSummary = String(summary ?? "").trim();
+  const normalizedLeadName = String(leadName ?? "").trim();
+  if (!cleanedSummary || !normalizedLeadName) return cleanedSummary;
+
+  const candidates = [
+    normalizedLeadName,
+    ...normalizedLeadName
+      .split(/\s+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length >= 3),
+  ];
+
+  let sanitized = cleanedSummary;
+  for (const candidate of Array.from(new Set(candidates)).sort((a, b) => b.length - a.length)) {
+    sanitized = sanitized.replace(new RegExp(`\\b${escapeRegex(candidate)}\\b`, "gi"), "");
+  }
+
+  return sanitized
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s([,.;:!?])/g, "$1")
+    .trim();
+}
+
 export async function sendAttorneyAssignmentEmail(data: AssignmentEmail) {
   const fromName = process.env.SMTP_FROM_NAME ?? "Tus Abogados 24/7";
   const fromEmail = mustEnv("SMTP_USER");
@@ -48,17 +73,22 @@ export async function sendAttorneyAssignmentEmail(data: AssignmentEmail) {
   console.log("[MAIL] from:", from);
   console.log("[MAIL] to:", data.to);
 
-  const subject = `Nuevo caso asignado: ${data.caseType ?? "General"}`;
-  const summary = String(data.summary ?? "").trim();
+  const isValidationFlow = Boolean(data.acceptUrl || data.rejectUrl);
+  const subject = isValidationFlow
+    ? `Nuevo caso para validacion: ${data.caseType ?? "General"}`
+    : "NUEVO CASO ASIGNADO";
+  const title = isValidationFlow ? "Nuevo caso para validacion" : "NUEVO CASO ASIGNADO";
+  const intro = isValidationFlow
+    ? "Revisa el caso y confirma si deseas aceptarlo."
+    : "Mira desde tu perfil los datos completos del caso.";
+  const summary = stripLeadNameFromSummary(String(data.summary ?? ""), data.leadName);
   const notes = String(data.notes ?? "").trim();
 
   const html = `
     <div style="font-family: Arial, sans-serif; line-height: 1.4">
-      <h2>Nuevo caso asignado</h2>
-      <p>Se te asigno un nuevo caso.</p>
+      <h2>${title}</h2>
+      <p>${intro}</p>
       <ul>
-        <li><b>Cliente:</b> ${data.leadName}</li>
-        <li><b>Telefono:</b> ${data.leadPhone}</li>
         <li><b>Tipo de caso:</b> ${data.caseType ?? "General"}</li>
         <li><b>Urgencia:</b> ${data.urgency ?? "Medium"}</li>
       </ul>
@@ -102,7 +132,7 @@ export async function sendAttorneyDecisionEmail(data: AssignmentDecisionEmail) {
   const to = fromEmail;
 
   const decisionLabel = data.decision === "accept" ? "ACEPTADO" : "RECHAZADO";
-  const subject = `Respuesta abogado: ${decisionLabel} - ${data.leadName ?? "Caso"}`;
+  const subject = `Respuesta abogado: ${decisionLabel} - ${data.caseType ?? "Caso"}`;
   const notes = String(data.notes ?? "").trim();
 
   const html = `
@@ -113,8 +143,6 @@ export async function sendAttorneyDecisionEmail(data: AssignmentDecisionEmail) {
         <li><b>Decision:</b> ${decisionLabel}</li>
         <li><b>Abogado:</b> ${data.attorneyName ?? "N/A"}</li>
         <li><b>Correo abogado:</b> ${data.attorneyEmail ?? "N/A"}</li>
-        <li><b>Lead:</b> ${data.leadName ?? "N/A"}</li>
-        <li><b>Telefono:</b> ${data.leadPhone ?? "N/A"}</li>
         <li><b>Tipo de caso:</b> ${data.caseType ?? "N/A"}</li>
       </ul>
       ${notes ? `<p><b>Notas del abogado:</b><br/>${notes}</p>` : ""}

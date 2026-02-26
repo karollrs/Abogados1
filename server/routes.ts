@@ -749,12 +749,6 @@ ${JSON.stringify(callsData, null, 2)}
           (call as any)?.leadName,
           (call as any)?.analysis?.custom_analysis_data?.name
         ) ?? "Lead";
-      const leadPhone =
-        pickFirstString(
-          (call as any)?.phoneNumber,
-          (lead as any)?.phone,
-          (call as any)?.leadPhone
-        ) ?? "N/A";
       const caseType =
         pickFirstString(
           (call as any)?.caseType,
@@ -781,7 +775,6 @@ ${JSON.stringify(callsData, null, 2)}
       await sendAttorneyAssignmentEmail({
         to,
         leadName,
-        leadPhone,
         caseType,
         urgency,
         summary,
@@ -1038,12 +1031,6 @@ ${JSON.stringify(callsData, null, 2)}
           (targetLog as any)?.leadName,
           (targetLog as any)?.analysis?.custom_analysis_data?.name
         ) ?? "Lead";
-      const leadPhone =
-        pickFirstString(
-          (assignedCall as any)?.phoneNumber,
-          (targetLog as any)?.phoneNumber,
-          (updatedLead as any)?.phone
-        ) ?? "N/A";
       const caseType =
         pickFirstString(
           (assignedCall as any)?.caseType,
@@ -1062,7 +1049,6 @@ ${JSON.stringify(callsData, null, 2)}
         await sendAttorneyAssignmentEmail({
           to: String((attorney as any).email ?? ""),
           leadName,
-          leadPhone,
           caseType,
           urgency,
           summary,
@@ -1087,7 +1073,6 @@ ${JSON.stringify(callsData, null, 2)}
           attorneyName: String((attorney as any).name ?? "Abogado"),
           attorneyEmail: String((attorney as any).email ?? ""),
           leadName,
-          leadPhone,
           caseType,
           urgency,
           summary,
@@ -1123,8 +1108,6 @@ ${JSON.stringify(callsData, null, 2)}
         decision: params.decision,
         attorneyName: safeString((attorney as any)?.name) || null,
         attorneyEmail: safeString((attorney as any)?.email) || null,
-        leadName: safeString((lead as any)?.name) || null,
-        leadPhone: safeString((lead as any)?.phone) || null,
         caseType: safeString((lead as any)?.caseType) || null,
         notes: safeString(params.notes) || null,
       });
